@@ -38,7 +38,6 @@ OUTFOLDER =
 #underscore '_'.
 NAME_PREFIX = T10
 
-
 #Only genomic sequences specified by these IDs will be input to the
 #pipeline. If left blank, all sequences in the FASTA_FILE will be
 #computed. This option can be used to recover an unfinished job more
@@ -54,4 +53,4 @@ ONLY_SEQ =
 DELETE_IF_SUCCESS = Y
 
 #miR-PREFeR path
-PIPELINE_PATH = /home/leijikai/research/myresearch/mirRNA/Arab/tmp/miR-PREFeR/
+PIPELINE_PATH = /home/leijikai/research/myresearch/mirRNA/miR-PREFeR/

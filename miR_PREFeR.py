@@ -1271,11 +1271,10 @@ def filter_next_loci(alndumpname, rnalfoldoutname, minlen=50, filterstemloop=Fal
         which = None
         dict_aln = None
         matures = None
-
         try:
             region, which, dict_aln, matures = cPickle.load(alnf)
         except EOFError:
-            break
+            raise StopIteration
         structures = []
         if which == "0": #only one extend region for this loci
             structures = next(ss_generator)
@@ -1286,12 +1285,12 @@ def filter_next_loci(alndumpname, rnalfoldoutname, minlen=50, filterstemloop=Fal
         else:
             structuresL = next(ss_generator)  # L
             structuresR = next(ss_generator)  # R
+            region1, which1, dict_aln1, matures1 = cPickle.load(alnf)
             miRNAsL = check_loci(structuresL, matures, region, dict_aln, which)
             if miRNAsL:
                 yield miRNAsL
             else:
-                region, which, dict_aln, matures = cPickle.load(alnf)
-                miRNAsR = check_loci(structuresR, matures, region, dict_aln, which)
+                miRNAsR = check_loci(structuresR, matures1, region1, dict_aln1, which1)
                 if miRNAsR:
                     yield miRNAsR
                 continue
@@ -1610,3 +1609,82 @@ if __name__ == '__main__':
         else:
             write_formatted_string_withtime("No recovery information found. Please run the pipeline in the 'pipeline' mode.\n", 30, sys.stdout)
         exit(-1)
+
+
+
+
+
+################################################debug code#####################
+
+def check_loci_test(structures, matures, region, dict_aln, which):
+    miRNAs = []
+    for m0, m1, strand, mdepth in matures:
+        # TODO Move this if to previous stage.
+        # if mature length is not in [19-24], then ignore this
+        if m1-m0 <19 or m1-m0>24:
+            continue
+        lowest_energy = 0
+        lowest_energy = 0
+        outputinfo = []
+        for energy, foldstart, ss in structures[1]:
+            if energy > lowest_energy:
+                continue
+            else:
+                structinfo = get_maturestar_info(ss, (m0,m1), foldstart,
+                                                 foldstart+len(ss),
+                                                 region[1][0],
+                                                 region[1][1],
+                                                 strand)
+                if structinfo:
+                    print(structinfo)
+                    exprinfo = check_expression(ss,dict_aln, (m0,m1),
+                                                mdepth,
+                                                (structinfo[0],structinfo[1]),
+                                                strand)
+                    if exprinfo[0]>0:  # has star expression
+                        if exprinfo[1] < 0.25:
+                            continue
+                        else:
+                            #  The last 'True' means this is an confident miRNA
+                            outputinfo = [region[0], structinfo[2],
+                                          structinfo[3], m0, m1, structinfo[0],
+                                          structinfo[1], ss, strand, True]
+                            lowest_energy = energy
+                    else:  #  no star expression
+                        if exprinfo[1] >=0.8 and exprinfo[2] > 5000:  # but very high expression
+                            #  The last 'False' means this is not an confident miRNA
+                            outputinfo = [region[0], structinfo[2],
+                                          structinfo[3], m0, m1, structinfo[0],
+                                          structinfo[1], ss, strand, False]
+                            lowest_energy = energy
+        if outputinfo:  # the loci contains an miRNA
+            miRNAs.append(outputinfo)
+    return miRNAs
+
+
+def test_loci(alndumpname, rnalfoldoutname, regionstart):
+    list_miRNA_loci = []
+    alnf = open(alndumpname)
+    ss_generator = get_structures_next_extendregion(rnalfoldoutname, 60)
+
+    while True:
+        region = None
+        which = None
+        dict_aln = None
+        matures = None
+        try:
+            region, which, dict_aln, matures = cPickle.load(alnf)
+        except EOFError:
+            raise StopIteration
+        print("=====R",region)
+        structures = []
+        if which == "0": #only one extend region for this loci
+            structures = next(ss_generator)
+            if region[1][0]==regionstart:
+                return structures, matures, region, dict_aln, which, ss_generator
+        else:
+            region1, which1, dict_aln1, matures1 = cPickle.load(alnf)
+            structuresL = next(ss_generator)  # L
+            structuresR = next(ss_generator)  # L
+            if region[1][0]==regionstart:
+                return [structuresL,matures, region, dict_aln, which, ss_generator], [structuresR,matures1, region1, dict_aln1, which1, ss_generator]

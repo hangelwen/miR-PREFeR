@@ -1,0 +1,57 @@
+#configuration file for the miR-PREFeR pipeline
+#lines start with '#' are comments
+
+#Genomic sequence file in fasta format.
+FASTA_FILE =  /home/leijikai/research/myresearch/mirRNA/Arab/tmp/TAIR10.fas
+
+#Small RNA read alignment file in SAM format. If N samples are used, then N file names are listed
+#here, separated by comma. please note that before doing alignment, process the reads fasta files 
+#using the provided script 'process-readsfasta.py'
+ALIGNMENT_FILE = /home/leijikai/research/myresearch/mirRNA/Arab/tmp/SAMPLE1.sam, /home/leijikai/research/myresearch/mirRNA/Arab/SAMPLE2.sam, /home/leijikai/research/myresearch/mirRNA/Arab/SAMPLE3.sam
+
+#GFF file which list all existing annotations on genomic sequences FASTA_FILE.
+#If no GFF file is availble, comment this line out or leave the value blank.
+GFF_FILE = /home/leijikai/research/myresearch/mirRNA/Arab/TAIR10_CDS.gff
+
+#The max length of a miRNA precursor. The default is 300
+PRECURSOR_LEN = 300
+
+#The first step of the pipeline is to identify candidate regions of the miRNA
+#loci. If READS_DEPTH_CUTOFF = N, then bases that the mapped depth is smaller
+#than N is not considered.
+READS_DEPTH_CUTOFF = 20
+
+#Maximum gap length between two contigs to form a candidate region.
+MAX_GAP = 100
+
+#Number of CPUS/Cores avalible for this computation. If comment out or leave
+#blank, 1 is used.
+NUM_OF_CORE = 4
+
+
+#Outputfolder. If not specified, use the current working directory.
+OUTFOLDER =
+
+
+#prefix for naming the output files. For portability, please DO NOT contain any 
+#spaces and special characters. The prefered includes 'A-Z', 'a-z', '0-9', and 
+#underscore '_'.
+NAME_PREFIX = T10
+
+
+#Only genomic sequences specified by these IDs will be input to the
+#pipeline. If left blank, all sequences in the FASTA_FILE will be
+#computed. This option can be used to recover an unfinished job more
+#effectively. For example, it happens that the time specified to run
+#a job is too short to finish all the sequences in the FASTA_FILE
+#file. Instead of run the pipeline on the fasta file again, sequences
+#that are not finished can be specified using this option.
+#ONLY_SEQ = Chr3
+ONLY_SEQ =
+
+#Delete dump files. Possible values are "Y"(delete) or "N" (do not delete). If
+#left blank, means "Y".
+DELETE_IF_SUCCESS = Y
+
+#miR-PREFeR path
+PIPELINE_PATH = /home/leijikai/research/myresearch/mirRNA/Arab/tmp/miR-PREFeR/

@@ -25,7 +25,7 @@ user specified locations:
 After finish installing the package, **add the bin directory to the PATH environment variable.** Instructions on how to add a path to the PATH environment variable can be found at <http://www.cyberciti.biz/faq/unix-linux-adding-path/> or just google "`add directory to PATH`".
 
 
-**NOTE: Because that RNALfold from the ViennaRNA package version 2.0.4 has a bug (If the input sequence has no valid folding structure, the program produces a segmentation fault), please make sure to use ViennaRNA package version 1.8.x or the newest 2.1.2.** The 1.8.* version is easier to install than the 2.1.2 version. Because the new version needs the `gengetopt` package ( <www.gnu.org/s/gengetopt/gengetopt.html>), which may not be available on your system.
+**NOTE: Because that RNALfold from the ViennaRNA package version 2.0.4 has a bug (If the input sequence has no valid folding structure, the program produces a segmentation fault), please make sure to use ViennaRNA package version 1.8.x or the newest 2.1.2.** The 1.8.* version is easier to install than the 2.1.2 version. Because the new version needs the `gengetopt` package (<http://www.gnu.org/s/gengetopt/gengetopt.html>), which may not be available on your system.
 
 ### Samtools ###
 Samtools can be downloaded from <http://samtools.sourceforge.net/>. Please follow the instructions from the package to install it.

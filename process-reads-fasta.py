@@ -28,7 +28,7 @@ for idx, name in enumerate(sys.argv[1:]):
     if not os.path.exists(name):
         sys.stderr.write("Error: file " +name + " does not exist!!!\n")
         sys.exit(-1)
-    prefix.append("S"+str(idx_1))
+    prefix.append("S"+str(idx+1))
 
 
 

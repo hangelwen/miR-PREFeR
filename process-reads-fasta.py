@@ -48,7 +48,7 @@ for idx, name in enumerate(sys.argv[1:]):
                     dict_reads[key] = 1
 
     for cnt, r in enumerate(dict_reads):
-        identifier = ">"+prefix[idx]+"_"+str(cnt)+"_"+dict_reads[r]
+        identifier = ">"+prefix[idx]+"_"+str(cnt)+"_"+str(dict_reads[r])
         outf.write(identifier+"\n")
         outf.write(r+"\n")
     outf.close()

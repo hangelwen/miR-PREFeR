@@ -119,7 +119,7 @@ With the configuration file ready, the pipeline can be used to predict miRNA loc
 Where `command` could be one of `check`, `pipeline`, `prepare`, `candidate`, `fold`, and `recover`. (Run `python miR-PREFeR.py -h` to see help.)
 
 1. **check:** Check the presence of the depended programs (RNALfold and samtools), and check the recovery information (Shows which stage the previous computation on the same data was ceased. See the `recover` command in 6.).
-2. **pipeline:** Run the whole pipeline. That is, `prepare`, `candidate`, and `fold` sequentially. This is the normal way to run miR-PREFeR.
+2. **pipeline:** Run the whole pipeline. That is, run `prepare`, `candidate`, and `fold` sequentially. This is the normal way to run miR-PREFeR.
 3. **prepare:**  Run the first step of the pipeline. This step prepares some data files needed in the following steps.
 4. **candidate:**  Identify possible candidate regions. This step can ONLY be run if the `prepare` step has been finished on the configfile file.
 5. **fold:** Fold the candidate regions and predict miRNA loci. This step can ONLY be run if the `prepare` and `candidate` steps have been finished on the configfile file.

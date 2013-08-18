@@ -13,6 +13,8 @@
 
 <h1>miR-PREFeR: <strong>mi</strong>cro<strong>R</strong>NA <strong>PRE</strong>diction <strong>F</strong>rom small <strong>R</strong>NAseq data</h1>
 
+<p><strong>The miR-PREFeR pipeline is still in active development, to be enable to use the newest features from the pipeline, it's better to check the  <a href="https://github.com/hangelwen/miR-PREFeR">https://github.com/hangelwen/miR-PREFeR</a> page and obtain the newest version.</strong></p>
+
 <h2>1. Required programs</h2>
 
 <p>To run the miR-PREFeR pipeline, the ViennaRNA package(version 1.8.5 or 2.1.x) and samtools should be installed on the system. miR-PREFeR uses samtools commands to manipulate SAM and BAM alignment files, and uses RNALfold from the ViennaRNA package to do RNA secondary structure folding. The miR-PREFeR pipeline takes SAM alignment files as input, so an aligner such as Bowtie is also required (Not required by the pipeline, but needed for preparing the input data).</p>
@@ -38,17 +40,13 @@ make
 make install
 </code></pre>
 
-<p>After finish installing the package, add the bin directory to the PATH environment variable.</p>
+<p>After finish installing the package, <strong>add the bin directory to the PATH environment variable.</strong> Instructions on how to add a path to the PATH environment variable can be found at <a href="http://www.cyberciti.biz/faq/unix-linux-adding-path/">http://www.cyberciti.biz/faq/unix-linux-adding-path/</a> or just google "<code>add directory to PATH</code>".</p>
 
-<p><strong>NOTE:</strong> Because that RNALfold from the ViennaRNA package version 2.0.4 has a bug (If the input sequence has no valid folding structure, the program produces a segmentation fault), please make sure to use ViennaRNA package version 1.8.x or the newest 2.1.2.</p>
+<p><strong>NOTE: Because that RNALfold from the ViennaRNA package version 2.0.4 has a bug (If the input sequence has no valid folding structure, the program produces a segmentation fault), please make sure to use ViennaRNA package version 1.8.x or the newest 2.1.2.</strong> The 1.8.* version is easier to install than the 2.1.2 version. Because the new version needs the <code>gengetopt</code> package (<a href="http://www.gnu.org/s/gengetopt/gengetopt.html">http://www.gnu.org/s/gengetopt/gengetopt.html</a>), which may not be available on your system.</p>
 
 <h3>Samtools</h3>
 
 <p>Samtools can be downloaded from <a href="http://samtools.sourceforge.net/">http://samtools.sourceforge.net/</a>. Please follow the instructions from the package to install it.</p>
-
-<h3>Instructions on how to add a path to the PATH environment variable</h3>
-
-<p><a href="http://www.cyberciti.biz/faq/unix-linux-adding-path/">http://www.cyberciti.biz/faq/unix-linux-adding-path/</a></p>
 
 <h2>2. Obtain and install the pipeline</h2>
 
@@ -149,7 +147,7 @@ The -v 0 and the -m 10 options are recommended to use the values above.</p>
 
 <ol>
 <li><strong>check:</strong> Check the presence of the depended programs (RNALfold and samtools), and check the recovery information (Shows which stage the previous computation on the same data was ceased. See the <code>recover</code> command in 6.).</li>
-<li><strong>pipeline:</strong> Run the whole pipeline. That is, <code>prepare</code>, <code>candidate</code>, and <code>fold</code> sequentially. This is the normal way to run miR-PREFeR.</li>
+<li><strong>pipeline:</strong> Run the whole pipeline. That is, run <code>prepare</code>, <code>candidate</code>, and <code>fold</code> sequentially. This is the normal way to run miR-PREFeR.</li>
 <li><strong>prepare:</strong>  Run the first step of the pipeline. This step prepares some data files needed in the following steps.</li>
 <li><strong>candidate:</strong>  Identify possible candidate regions. This step can ONLY be run if the <code>prepare</code> step has been finished on the configfile file.</li>
 <li><strong>fold:</strong> Fold the candidate regions and predict miRNA loci. This step can ONLY be run if the <code>prepare</code> and <code>candidate</code> steps have been finished on the configfile file.</li>

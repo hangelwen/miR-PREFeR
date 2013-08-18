@@ -6,7 +6,7 @@
 ## 1. Required programs ##
 To run the miR-PREFeR pipeline, the ViennaRNA package(version 1.8.5 or 2.1.x) and samtools should be installed on the system. miR-PREFeR uses samtools commands to manipulate SAM and BAM alignment files, and uses RNALfold from the ViennaRNA package to do RNA secondary structure folding. The miR-PREFeR pipeline takes SAM alignment files as input, so an aligner such as Bowtie is also required (Not required by the pipeline, but needed for preparing the input data).
 
-### VieennaRNA package ###
+### ViennaRNA package ###
 The ViennaRNA package can be downloaded from <http://www.tbi.univie.ac.at/~ronny/RNA/index.html.>. The website provides precompiled  packages for some platforms. For these platforms, download the corresponding package and install it according to the platform package management system. If no precompiled package is provided for your platform, you can install it from source code.
 To install the package from source code, simply decompress the source code archive and cd into the folder,
 then:

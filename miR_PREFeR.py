@@ -193,8 +193,7 @@ def get_RNALfold_version():
     try:
         commandret = subprocess.check_output(command.split())
     except Exception as e:
-        sys.stderr.write("Error occurred when checking RNALfold version.\n")
-        sys.exit(-1)
+        return "UnknowVersion"
     return str(commandret)
 
 def is_bug_RNALfold(version):

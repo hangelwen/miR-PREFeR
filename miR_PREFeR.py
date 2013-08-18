@@ -188,6 +188,23 @@ def check_RNALfold():
     else:
         return False
 
+def get_RNALfold_version():
+    command = "RNALfold -V"
+    try:
+        commandret = subprocess.check_output(command.split())
+    except Exception as e:
+        sys.stderr.write("Error occurred when checking RNALfold version.\n")
+        sys.exit(-1)
+    return str(commandret)
+
+def is_bug_RNALfold(version):
+    '''
+    RNALfold in Vienna 2.0.4 has a bug: when the input sequence has no valid
+    secondary structure, it produces a segmentation fault and can not continue.
+    '''
+    if version.strip() == "RNALfold 2.0.4":
+        return True
+    return False
 
 def get_length_from_sam(samfile):
     dict_len = {}
@@ -1400,11 +1417,17 @@ def run_check(dict_option, outtempfolder, recovername):
         write_formatted_string("*** RNALfold is required but not installed or not in the PATH.", 30, sys.stdout)
         write_formatted_string("*** Please refer to the README file.", 30, sys.stdout)
     else:
-        write_formatted_string("*** RNALfold is ready.", 30, sys.stdout)
+        RNALfoldversion = get_RNALfold_version()
+        if is_bug_RNALfold(RNALfoldversion.strip()):
+            write_formatted_string("!!! The version of RNALfold (2.0.4) has a bug. ", 30, sys.stdout)
+            write_formatted_string("!!! Please use the latest version or the older version 1.8.x", 30, sys.stdout)
+            write_formatted_string("!!! Please refer to the README file.", 30, sys.stdout)
+        else:
+            write_formatted_string("*** RNALfold is ready.", 30, sys.stdout)
 
     if not check_samtools():
-        write_formatted_string("*** samtools is required but not installed or not in the PATH.", 30, sys.stdout)
-        write_formatted_string("*** Please refer to the README file.", 30, sys.stdout)
+        write_formatted_string("!!! samtools is required but not installed or not in the PATH.", 30, sys.stdout)
+        write_formatted_string("!!! Please refer to the README file.", 30, sys.stdout)
     else:
         write_formatted_string("*** SAMtools is ready.\n", 30, sys.stdout)
 
@@ -1425,15 +1448,22 @@ def check_dependency():
     write_formatted_string_withtime("Checking RNALfold and samtools", 30, sys.stdout)
     allgood = True
     if not check_RNALfold():
-        write_formatted_string("*** RNALfold is required but not installed or not in the PATH.", 30, sys.stdout)
-        write_formatted_string("*** Please refer to the README file.", 30, sys.stdout)
+        write_formatted_string("!!! RNALfold is required but not installed or not in the PATH.", 30, sys.stdout)
+        write_formatted_string("!!! Please refer to the README file.", 30, sys.stdout)
         allgood = False
     else:
-        write_formatted_string("*** RNALfold is ready.", 30, sys.stdout)
+        RNALfoldversion = get_RNALfold_version()
+        if is_bug_RNALfold(RNALfoldversion):
+            write_formatted_string("!!! The version of RNALfold (2.0.4) has a bug. ", 30, sys.stdout)
+            write_formatted_string("!!! Please use the latest version or the older version 1.8", 30, sys.stdout)
+            write_formatted_string("!!! Please refer to the README file.", 30, sys.stdout)
+            allgood = False
+        else:
+            write_formatted_string("*** RNALfold is ready.", 30, sys.stdout)
 
     if not check_samtools():
-        write_formatted_string("*** samtools is required but not installed or not in the PATH.", 30, sys.stdout)
-        write_formatted_string("*** Please refer to the README file.", 30, sys.stdout)
+        write_formatted_string("!!! samtools is required but not installed or not in the PATH.", 30, sys.stdout)
+        write_formatted_string("!!! Please refer to the README file.", 30, sys.stdout)
         allgood = False
     else:
         write_formatted_string("*** SAMtools is ready.\n", 30, sys.stdout)

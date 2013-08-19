@@ -1,6 +1,5 @@
 import sys
 import os.path
-import argparse
 import multiprocessing
 import cPickle
 import time
@@ -23,6 +22,7 @@ dict_failure_reasons = {1: "Structure is not stemloop",
 }
 
 def parse_option():
+    import argparse
     helpstr = """    check = Check the dependency and the config file only (default).
     prepare = Prepare data.
     candidate = Generate candidate regions.
@@ -213,8 +213,9 @@ def check_RNALfold():
 
 def get_RNALfold_version():
     command = "RNALfold -V"
+    ferr = open("/dev/null",'w')
     try:
-        commandret = subprocess.check_output(command.split())
+        commandret = subprocess.check_output(command.split(),stderr=ferr)
     except Exception as e:
         return "UnknowVersion"
     return str(commandret)

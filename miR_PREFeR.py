@@ -45,6 +45,29 @@ def parse_option():
     dict_option['ACTION'] = action
     return dict_option
 
+def parse_option_optparse():
+    from optparse import OptionParser
+    helpstr = """python mir_PREFeR.py [-h] command configfile
+
+command could be one of the following:
+    check = Check the dependency and the config file only (default).
+    prepare = Prepare data.
+    candidate = Generate candidate regions.
+    fold = Fold the candidate regions and predict miRNAs.
+    pipeline = Run the whole pipeline. This is the same as running 'check', 'prepare', 'candidate', 'fold' sequentially.
+    recover = Recover a unfinished job. By default, miR-PREFeR makes checkpoint of the results of each stage. Thus, an unfinished job can be started from where it was checkpointed to save time.
+    """
+    parser = OptionParser(helpstr)
+    actions = ['check','prepare','candidate','fold','pipeline', 'recover']
+    (options, args) = parser.parse_args()
+    if len(args) != 2:
+         parser.error("incorrect number of arguments")
+    if args[0] not in actions:
+        parser.error("unknow command")
+    dict_option = parse_configfile(args[1])
+    dict_option['ACTION'] = args[0]
+    return dict_option
+
 def parse_configfile(configfile):
     if not os.path.exists(configfile):
         sys.stderr.write("Configuration file " + configfile + " does not exist!!\n")
@@ -1578,8 +1601,7 @@ def run_pipeline(dict_option, outtempfolder, recovername):
 
 
 if __name__ == '__main__':
-    dict_option = parse_option()
-
+    dict_option = parse_option_optparse()
 
     has_multiple_sample = False
     if len(dict_option['ALIGNMENT_FILE'])>1:

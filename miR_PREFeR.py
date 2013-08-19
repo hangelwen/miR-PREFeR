@@ -213,12 +213,15 @@ def check_RNALfold():
 
 def get_RNALfold_version():
     command = "RNALfold -V"
-    ferr = open("/dev/null",'w')
     try:
-        commandret = subprocess.check_output(command.split(),stderr=ferr)
+        check_process = subprocess.Popen(command.split(), stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        outmessage, outerr = check_process.communicate()
     except Exception as e:
         return "UnknowVersion"
-    return str(commandret)
+    if outmessage == "":
+        return "UnknowVersion"
+    else:
+        return str(outmessage).strip()
 
 def is_bug_RNALfold(version):
     '''
@@ -587,8 +590,9 @@ def dump_loci_seqs_samtool(dict_loci, fastaname, outputprefix, num_of_proc):
                 command = "samtools faidx "+fastaname+" "+region
                 seq = ""
                 try:
-                    commandret = subprocess.check_output(command.split())
-                    seq = str("".join(commandret.decode().split("\n")[1:]))
+                    samtools_process = subprocess.Popen(command.split(), stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+                    outmessage, outerr = samtools_process.communicate()
+                    seq = str("".join(outmessage.decode().split("\n")[1:]))
                 except Exception as e:
                     sys.stderr.write(e)
                     sys.stderr.write("Error occurred when cutting loci sequence.\n")
@@ -701,8 +705,9 @@ def dump_loci_seqs_and_alignment(dict_loci, sortedbamname, fastaname, outputseqp
                 command = "samtools faidx "+fastaname+" "+region
                 seq = ""
                 try:
-                    commandret = subprocess.check_output(command.split())
-                    seq = str("".join(commandret.decode().split("\n")[1:]))
+                    samtools_process = subprocess.Popen(command.split(),stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+                    outmessage, outerr = samtools_process.communicate()
+                    seq = str("".join(outmessage.decode().split("\n")[1:]))
                 except Exception as e:
                     sys.stderr.write(e)
                     sys.stderr.write("Error occurred when cutting loci sequence.\n")
@@ -870,12 +875,13 @@ def samtools_view_region(sortedbamname, seqid, start, end):
     lines = []
     ret= ""
     try:
-        ret = subprocess.check_output(command.split())
+        samtools_process = subprocess.Popen(command.split(),stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        outmessage, outerr = samtools_process.communicate()
     except Exception as e:
         sys.stderr.write(e)
         sys.stderr.write("Error occurred when viewing a region from bamfile.\n")
         sys.exit(-1)
-    alignments = ret.split("\n")
+    alignments = outmessage.split("\n")
     if alignments[0]:
         alignments.pop()
         return alignments

@@ -147,7 +147,7 @@ def get_current_local_time():
 
 
 def write_formatted_string(message, leftpad_len, f, padchar=""):
-    outstr = "{:"+padchar+"<"+str(leftpad_len)+"}"+message
+    outstr = "{0:"+padchar+"<"+str(leftpad_len)+"}"+message
     f.write(outstr.format(""))
     f.write("\n")
     f.flush()
@@ -155,7 +155,7 @@ def write_formatted_string(message, leftpad_len, f, padchar=""):
 
 def write_formatted_string_withtime(message, leftpad_len, f, padchar=""):
     t = get_current_local_time()
-    outstr = "{:"+padchar+"<"+str(leftpad_len)+"}"+message
+    outstr = "{0:"+padchar+"<"+str(leftpad_len)+"}"+message
     f.write(outstr.format(t))
     f.write("\n")
     f.flush()

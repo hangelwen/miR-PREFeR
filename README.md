@@ -1,7 +1,7 @@
 # miR-PREFeR: <strong>mi</strong>cro<strong>R</strong>NA <strong>PRE</strong>diction <strong>F</strong>rom small <strong>R</strong>NAseq data #
 
 
-**The miR-PREFeR pipeline is still in active development, to be enable to use the newest features from the pipeline, it's better to check the  <https://github.com/hangelwen/miR-PREFeR> page and obtain the newest version. The current version is only tested under Python 2.7.2. It may not work under Python 2.6 or Python 3.0.**
+**The miR-PREFeR pipeline is still in active development, to be enable to use the newest features from the pipeline, it's better to check the  <https://github.com/hangelwen/miR-PREFeR> page and obtain the newest version. The current version is only tested under Python 2.7.2 and should work under Python 2.7.*. It may not work under Python 2.6 or Python 3.0.**
 
 ## 1. Required programs ##
 To run the miR-PREFeR pipeline, the ViennaRNA package(version 1.8.5 or 2.1.x) and samtools(0.1.18 or later) should be installed on the system. miR-PREFeR uses samtools commands to manipulate SAM and BAM alignment files, and uses RNALfold from the ViennaRNA package to do RNA secondary structure folding. The miR-PREFeR pipeline takes SAM alignment files as input, so an aligner such as Bowtie is also required (Not required by the pipeline, but needed for preparing the input data).

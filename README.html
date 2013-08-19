@@ -13,11 +13,11 @@
 
 <h1>miR-PREFeR: <strong>mi</strong>cro<strong>R</strong>NA <strong>PRE</strong>diction <strong>F</strong>rom small <strong>R</strong>NAseq data</h1>
 
-<p><strong>The miR-PREFeR pipeline is still in active development, to be enable to use the newest features from the pipeline, it's better to check the  <a href="https://github.com/hangelwen/miR-PREFeR">https://github.com/hangelwen/miR-PREFeR</a> page and obtain the newest version.</strong></p>
+<p><strong>The miR-PREFeR pipeline is still in active development, to be enable to use the newest features from the pipeline, it's better to check the  <a href="https://github.com/hangelwen/miR-PREFeR">https://github.com/hangelwen/miR-PREFeR</a> page and obtain the newest version. The current version is only tested under Python 2.6.7, Python 2.7.2 and Python 2.7.3 and should work under Python 2.6.* and Python 2.7.*. It does NOT work under Python 3.0 currently</strong></p>
 
 <h2>1. Required programs</h2>
 
-<p>To run the miR-PREFeR pipeline, the ViennaRNA package(version 1.8.5 or 2.1.x) and samtools should be installed on the system. miR-PREFeR uses samtools commands to manipulate SAM and BAM alignment files, and uses RNALfold from the ViennaRNA package to do RNA secondary structure folding. The miR-PREFeR pipeline takes SAM alignment files as input, so an aligner such as Bowtie is also required (Not required by the pipeline, but needed for preparing the input data).</p>
+<p>To run the miR-PREFeR pipeline, the ViennaRNA package(version 1.8.5 or 2.1.x) and samtools(0.1.15 or later. Tested under 0.1.18) should be installed on the system. miR-PREFeR uses samtools commands to manipulate SAM and BAM alignment files, and uses RNALfold from the ViennaRNA package to do RNA secondary structure folding. The miR-PREFeR pipeline takes SAM alignment files as input, so an aligner such as Bowtie is also required (Not required by the pipeline, but needed for preparing the input data).</p>
 
 <h3>ViennaRNA package</h3>
 
@@ -46,7 +46,7 @@ make install
 
 <h3>Samtools</h3>
 
-<p>Samtools can be downloaded from <a href="http://samtools.sourceforge.net/">http://samtools.sourceforge.net/</a>. Please follow the instructions from the package to install it.</p>
+<p>Samtools can be downloaded from <a href="http://samtools.sourceforge.net/">http://samtools.sourceforge.net/</a>. Please follow the instructions from the package to install it. Please note the version 0.1.15 or later is needed (The pipeline uses the <code>samtools depth</code> command, which was introduced from version 0.1.15).</p>
 
 <h2>2. Obtain and install the pipeline</h2>
 

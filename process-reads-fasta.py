@@ -5,10 +5,10 @@ import gc
 '''
 Pre-process a list of uncollpased fasta files. Collapse the identical reads and
 rename the reads. The identifier for each read in the output files are:
-SN_A_B. Here N is the order of the input fasta file, A is an number identify the
+SN-A-B. Here N is the order of the input fasta file, A is an number identify the
 read, B is the total count of the read. For example, if in the second input
 file, a read occurred 1200 times, then it's description line looks like:
->S2_23_1200. Here '23' is just a number that donates the order of the reads when
+>S2-23-1200. Here '23' is just a number that donates the order of the reads when
 processing it, it has no use otherwise.
 
 The script assumes each read sequence occupies ONLY one line in the input file.
@@ -48,7 +48,8 @@ for idx, name in enumerate(sys.argv[1:]):
                     dict_reads[key] = 1
 
     for cnt, r in enumerate(dict_reads):
-        identifier = ">"+prefix[idx]+"_"+str(cnt)+"_"+str(dict_reads[r])
+        identifier = ">"+prefix[idx]+"-"+str(cnt)+"-"+str(dict_reads[r])
         outf.write(identifier+"\n")
         outf.write(r+"\n")
     outf.close()
+    sys.stdout.write("Finished file "+name+"\n")

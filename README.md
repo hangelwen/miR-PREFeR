@@ -1,10 +1,10 @@
 # miR-PREFeR: <strong>mi</strong>cro<strong>R</strong>NA <strong>PRE</strong>diction <strong>F</strong>rom small <strong>R</strong>NAseq data #
 
 
-**The miR-PREFeR pipeline is still in active development, to be enable to use the newest features from the pipeline, it's better to check the  <https://github.com/hangelwen/miR-PREFeR> page and obtain the newest version.**
+**The miR-PREFeR pipeline is still in active development, to be enable to use the newest features from the pipeline, it's better to check the  <https://github.com/hangelwen/miR-PREFeR> page and obtain the newest version. The current version is only tested under Python 2.7.2. It may not work under Python 2.6 or Python 3.0.**
 
 ## 1. Required programs ##
-To run the miR-PREFeR pipeline, the ViennaRNA package(version 1.8.5 or 2.1.x) and samtools should be installed on the system. miR-PREFeR uses samtools commands to manipulate SAM and BAM alignment files, and uses RNALfold from the ViennaRNA package to do RNA secondary structure folding. The miR-PREFeR pipeline takes SAM alignment files as input, so an aligner such as Bowtie is also required (Not required by the pipeline, but needed for preparing the input data).
+To run the miR-PREFeR pipeline, the ViennaRNA package(version 1.8.5 or 2.1.x) and samtools(0.1.18 or later) should be installed on the system. miR-PREFeR uses samtools commands to manipulate SAM and BAM alignment files, and uses RNALfold from the ViennaRNA package to do RNA secondary structure folding. The miR-PREFeR pipeline takes SAM alignment files as input, so an aligner such as Bowtie is also required (Not required by the pipeline, but needed for preparing the input data).
 
 ### ViennaRNA package ###
 The ViennaRNA package can be downloaded from <http://www.tbi.univie.ac.at/~ronny/RNA/index.html.>. The website provides precompiled  packages for some platforms. For these platforms, download the corresponding package and install it according to the platform package management system. If no precompiled package is provided for your platform, you can install it from source code.
@@ -30,7 +30,7 @@ After finish installing the package, **add the bin directory to the PATH environ
 **NOTE: Because that RNALfold from the ViennaRNA package version 2.0.4 has a bug (If the input sequence has no valid folding structure, the program produces a segmentation fault), please make sure to use ViennaRNA package version 1.8.x or the newest 2.1.2.** The 1.8.* version is easier to install than the 2.1.2 version. Because the new version needs the `gengetopt` package (<http://www.gnu.org/s/gengetopt/gengetopt.html>), which may not be available on your system.
 
 ### Samtools ###
-Samtools can be downloaded from <http://samtools.sourceforge.net/>. Please follow the instructions from the package to install it.
+Samtools can be downloaded from <http://samtools.sourceforge.net/>. Please follow the instructions from the package to install it. Please note the version 0.1.18 or later is needed.
 
 
 ## 2. Obtain and install the pipeline ##

@@ -13,7 +13,7 @@
 
 <h1>miR-PREFeR: <strong>mi</strong>cro<strong>R</strong>NA <strong>PRE</strong>diction <strong>F</strong>rom small <strong>R</strong>NAseq data</h1>
 
-<p><strong>The miR-PREFeR pipeline is still in active development, to be enable to use the newest features from the pipeline, it's better to check the  <a href="https://github.com/hangelwen/miR-PREFeR">https://github.com/hangelwen/miR-PREFeR</a> page and obtain the newest version. The current version is only tested under Python 2.6.7, Python 2.7.2 and Python 2.7.3 and should work under Python 2.6.* and Python 2.7.*. It does NOT work under Python 3.0 currently</strong></p>
+<p><strong>The miR-PREFeR pipeline is still in active development, to be enable to use the newest features from the pipeline, it's better to check the  <a href="https://github.com/hangelwen/miR-PREFeR">https://github.com/hangelwen/miR-PREFeR</a> page and obtain the newest version. The current version is only tested under Python 2.6.7, Python 2.7.2 and Python 2.7.3 and should work under Python 2.6.* and Python 2.7.*. It does NOT work under Python 3.0 currently.</strong></p>
 
 <h2>1. Required programs</h2>
 
@@ -121,7 +121,7 @@ The -v 0 and the -m 10 options are recommended to use the values above.</p>
 
 <h3>b. Prepare a configuration file for the pipeline.</h3>
 
-<p>The miR-PREFeR.py script takes a configuration file as input. The configuration file lists all the information (such as where are the SAM files, genome fasta file, etc) needed to run the pipeline. An example configuration file (<code>example/config.example</code>) with detailed descriptions of each option is in the <code>example</code> folder. The options are also explained in the following section.</p>
+<p>The miR_PREFeR.py script takes a configuration file as input. The configuration file lists all the information (such as where are the SAM files, genome fasta file, etc) needed to run the pipeline. An example configuration file (<code>example/config.example</code>) with detailed descriptions of each option is in the <code>example</code> folder. The options are also explained in the following section.</p>
 
 <ol>
 <li>PIPELINE_PATH: The path of the miR-PREFeR pipeline.</li>
@@ -140,10 +140,10 @@ The -v 0 and the -m 10 options are recommended to use the values above.</p>
 
 <p>With the configuration file ready, the pipeline can be used to predict miRNA loci. The miR-PREFeR pipeline can be run as following:</p>
 
-<pre><code>python miR-PREFeR.py command configfile
+<pre><code>python miR_PREFeR.py command configfile
 </code></pre>
 
-<p>Where <code>command</code> could be one of <code>check</code>, <code>pipeline</code>, <code>prepare</code>, <code>candidate</code>, <code>fold</code>, and <code>recover</code>. (Run <code>python miR-PREFeR.py -h</code> to see help.)</p>
+<p>Where <code>command</code> could be one of <code>check</code>, <code>pipeline</code>, <code>prepare</code>, <code>candidate</code>, <code>fold</code>, and <code>recover</code>. (Run <code>python miR_PREFeR.py -h</code> to see help.)</p>
 
 <ol>
 <li><strong>check:</strong> Check the presence of the depended programs (RNALfold and samtools), and check the recovery information (Shows which stage the previous computation on the same data was ceased. See the <code>recover</code> command in 6.).</li>
@@ -153,7 +153,7 @@ The -v 0 and the -m 10 options are recommended to use the values above.</p>
 <li><strong>fold:</strong> Fold the candidate regions and predict miRNA loci. This step can ONLY be run if the <code>prepare</code> and <code>candidate</code> steps have been finished on the configfile file.</li>
 <li><p><strong>recover:</strong> Tries its best to recover an unfinished job and continues to run from the unfinished step it was ceased. This is designed to easily continue a job other than re-run the whole pipeline from start. For example, if a job was kill half way (This happens sometime. For example, the job takes too long time and the user killed it. Or, if the job was run on an Cluster and was killed halfway because some resources exceed the max values.) In these cases, one does not need to run the pipeline from start, the job can be continued by using the <code>recover</code> command:</p>
 
-<p><code>python miR-PREFeR.py recover configfile</code></p></li>
+<p><code>python miR_PREFeR.py recover configfile</code></p></li>
 </ol>
 
 <p><strong>NOTE on job recovery:</strong> To recover and continue a job, the intermediate output files in the temporary folder (See the Output section) should not be removed. All files needed to do recovery are in this folder.</p>

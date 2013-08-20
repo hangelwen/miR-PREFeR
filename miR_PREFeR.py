@@ -321,7 +321,7 @@ def gen_keep_regions_from_gff(gffname, tmpdir, dict_len, minlen):
 
 
 def sam2bam(samfile, bamfile):
-    command = "samtools view -S " + samfile + " -b -o " + bamfile
+    command = "samtools view -bS -o" + bamfile + " " + samfile
     try:
         subprocess.check_call(command.split())
     except Exception as e:
@@ -356,7 +356,7 @@ def gen_keep_regions_sort_bam(bamfile, bedfile, outbamprefix):
     '''
     #TODO samtools view generate reads overlap with the region, not only reads
     #in the region. Should this be a problem here??
-    command1 = "samtools view -L " + bedfile + " -F 4 " + bamfile + " -b -o " + outbamprefix+".bam"
+    command1 = "samtools view -L " + bedfile + " -F 4 -b -o " + outbamprefix+".bam" + " " +bamfile
     command2 = "samtools sort "+ outbamprefix+".bam " + outbamprefix + ".sort"
     command3 = "samtools index " + outbamprefix+".sort.bam"
     try:
@@ -372,7 +372,7 @@ def gen_keep_regions_sort_bam(bamfile, bedfile, outbamprefix):
 
 def expand_bamfile(bamfile, maxdepth, outputbamfile, outputsamfile):
     tempsamfile = tempfile.NamedTemporaryFile(mode='w',prefix = str(os.getpid())+"tempsam", suffix=".sam", delete=False)
-    command = "samtools view -h " + bamfile + " -o " + tempsamfile.name
+    command = "samtools view -h -o " + tempsamfile.name + " " + bamfile
     try:
         subprocess.check_call(command.split())
     except Exception as e:
@@ -393,7 +393,7 @@ def expand_bamfile(bamfile, maxdepth, outputbamfile, outputsamfile):
             for i in xrange(depth):
                 outf.write(line)
         outf.close()
-    command = "samtools view -S " + outputsamfile + " -b -o " + outputbamfile
+    command = "samtools view -bS -o" + outputbamfile + " " + outputsamfile
     try:
         subprocess.check_call(command.split())
     except Exception as e:

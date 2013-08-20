@@ -664,7 +664,7 @@ def dump_loci_seqs_and_alignment(dict_loci, sortedbamname, fastaname, outputseqp
     for seqid in seqids:
         total_loci += len(dict_loci[seqid])
     # How many loci in one file?
-    num_in_one_file = int(total_loci/num_of_proc)
+    num_in_one_file = int(total_loci/num_of_proc) + 1
     cur_loci = 0
     cur_fout = 0
     fname = outputseqprefix+"_0.fa"

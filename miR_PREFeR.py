@@ -786,10 +786,143 @@ def dump_loci_seqs_and_alignment(dict_loci, sortedbamname, fastaname, outputseqp
     fout.close()
     return num_loci, num_seq, ret_list
 
+def dump_loci_seqs_and_alignment_multiprocess(dict_loci, piece_info_list,
+                                              sortedbamname, fastaname,
+                                              outputseqprefix, outputalnprefix):
+    def dump_piece(dict_loci, piece_info_list,sortedbamname, fastaname,
+                   outputfastaname, outputalnname, queue):
+        fout = open(outputfastaname,'w')
+        foutdump = open(outputalnname,'w')
+        dump_key = None
+        num_seq = 0
+        num_loci = 0
+        for seqid in piece_info_list[0]:
+            start = 0
+            end = len(dict_loci[seqid])
+            if piece_info_list[0][0] == seqid:  # the first seqid
+                start = piece_info_list[1][0]
+            if piece_info_list[0][-1] == seqid:  # the last seqid
+                end = piece_info_list[1][1]
+            for loci in dict_loci[seqid][start:end]:
+                num_loci += 1
+                plus_seq = []
+                minus_seq = []
+                plus_tag = []
+                minus_tag = []
+
+                plus_dumpinfo = []
+                minus_dumpinfo = []
+                loci_pos = str(loci[0][0]) + "-" + str(loci[0][1])
+                for idx, extendregion in enumerate(loci[1:]):
+                    #extendregion is [), but faidx is []
+                    region = seqid+":"+str(extendregion[0][0])+"-"+str(extendregion[0][1]-1)
+                    regionpos = seqid+":"+str(extendregion[0][0])+"-"+str(extendregion[0][1])
+                    command = "samtools faidx "+fastaname+" "+region
+                    seq = ""
+                    try:
+                        samtools_process = subprocess.Popen(command.split(),stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+                        outmessage, outerr = samtools_process.communicate()
+                        seq = str("".join(outmessage.decode().split("\n")[1:]))
+                    except Exception as e:
+                        sys.stderr.write(e)
+                        sys.stderr.write("Error occurred when cutting loci sequence.\n")
+                        sys.exit(-1)
+                    strands = set()
+                    otherinfo = ""
+                    for peak in extendregion[1]:
+                        strands.add(peak[2])
+                        otherinfo = otherinfo + str(peak[0])+","+str(peak[1])+","+str(peak[2])+";"
+                    otherinfo = otherinfo.rstrip(";")
+                    seqtag = ""
+                    extendregiontag = " 0 "
+                    if len(loci)==3 and idx == 0:  # Left side region
+                        extendregiontag = " L "
+                    elif len(loci)==3 and idx == 1:  # Right side region
+                        extendregiontag = " R "
+                    if len(strands) == 1:
+                        if "+" in strands:
+                            seqtag = ">"+regionpos+" + "+ loci_pos + extendregiontag + otherinfo+"\n"  # >ExtendRegion strand loci 0/L/R peaks
+                            dump_key = [seqid, (extendregion[0][0],extendregion[0][1]), "+"]
+                        else:
+                            seqtag = ">"+regionpos+" - "+ loci_pos + extendregiontag + otherinfo+"\n"
+                            dump_key = [seqid, (extendregion[0][0],extendregion[0][1]), "-"]
+                            seq = get_reverse_complement(seq)
+                        fout.write(seqtag)
+                        fout.write(seq+"\n")
+                        num_seq += 1
+                        alignments = samtools_view_region(sortedbamname, seqid,
+                                                          extendregion[0][0],
+                                                          extendregion[0][1])
+                        dict_loci_info = gen_loci_alignment_info(alignments, seqid, extendregion)
+                        matures = gen_possible_matures_loci(dict_loci_info, extendregion)
+                        cPickle.dump([dump_key, extendregiontag.strip(), dict_loci_info, matures], foutdump, protocol=2)
+                        continue
+                    if len(strands) == 2:
+                        seqtag = ">"+regionpos+" + "+ loci_pos + extendregiontag + otherinfo+"\n"
+                        plus_tag.append(seqtag)
+                        plus_seq.append(seq)
+                        num_seq += 1
+                        seq = get_reverse_complement(seq)
+                        seqtag = ">"+regionpos+" - "+ loci_pos + extendregiontag + otherinfo+"\n"
+                        minus_tag.append(seqtag)
+                        minus_seq.append(seq)
+                        num_seq += 1
+                        alignments = samtools_view_region(sortedbamname, seqid,
+                                                          extendregion[0][0],
+                                                          extendregion[0][1])
+                        dict_loci_info = gen_loci_alignment_info(alignments, seqid, extendregion)
+                        matures = gen_possible_matures_loci(dict_loci_info, extendregion)
+                        dump_key = [seqid, (extendregion[0][0],extendregion[0][1]), "+"]
+                        plus_dumpinfo.append([dump_key, extendregiontag.strip(), dict_loci_info, matures])
+                        dump_key = [seqid, (extendregion[0][0],extendregion[0][1]), "-"]
+                        minus_dumpinfo.append([dump_key, extendregiontag.strip(), dict_loci_info, matures])
+                if len(plus_tag):
+                    for which, tag in enumerate(plus_tag):
+                        fout.write(tag)
+                        fout.write(plus_seq[which]+"\n")
+                        cPickle.dump(plus_dumpinfo[which], foutdump, protocol=2)
+                    for which, tag in enumerate(minus_tag):
+                        fout.write(minus_tag[which])
+                        fout.write(minus_seq[which]+"\n")
+                        cPickle.dump(minus_dumpinfo[which], foutdump, protocol=2)
+        fout.close()
+        foutdump.close()
+        queue.put(((outputfastaname, outputalnname), num_loci, num_seq))
+
+    inforqueue = multiprocessing.Queue()
+    jobs = []
+    finalresult = []
+    for i in range(len(piece_info_list)):
+        fname = outputseqprefix+"_"+str(i)+".fa"
+        fnamedump = outputalnprefix+"_"+str(i)+".dump"
+        p = multiprocessing.Process(target = dump_piece, args=(dict_loci,
+                                                               piece_info_list[i],
+                                                               sortedbamname,
+                                                               fastaname,
+                                                               fname,
+                                                               fnamedump,
+                                                               inforqueue))
+        p.start()
+        jobs.append(p)
+    total_loci = 0
+    total_seq = 0
+    for job in jobs:
+        job.join()
+        info = inforqueue.get()
+        total_loci += info[1]
+        total_seq += info[2]
+        finalresult.append(info[0])
+    finalresult.sort()
+    return total_loci, total_seq, finalresult
 
 def gen_candidate_region_typeA(dict_contigs, dict_len, dict_option, tmpdir):
     '''
     Connect contigs that have a distance smaller than MAX_GAP.
+
+    dict_loci structure:
+    key: seqid
+    value: a list of regioninfo. A regioninfo is:
+    [region, (extendedregion1, peaks1), (extendedregion2, peaks2)]
     '''
     def next_region_typeA(contiglist, maxgap):
         if len(contiglist) == 0:
@@ -837,8 +970,7 @@ def gen_candidate_region_typeA(dict_contigs, dict_len, dict_option, tmpdir):
             return [(left, right)]
 
     dict_loci = {}
-
-    max_gap = dict_option["MAX_GAP"]
+    total_loci = 0  # the number of loci
 
     for seqID in sorted(dict_contigs): #regions in the dict are already sorted.
         dict_loci[seqID] = []  # changed to a list, this preserves the order.
@@ -848,6 +980,41 @@ def gen_candidate_region_typeA(dict_contigs, dict_len, dict_option, tmpdir):
                 regioninfo.append((extendedregion, peaks))
             if len(regioninfo) > 1:  #  this means the previous for loop was executed at least once.
                 dict_loci[seqID].append(regioninfo)
+                total_loci += 1
+    #  generate information for using multiple processes to dumping loci info in
+    #  the next step. For each piece, we record the seq IDs the piece have, and
+    #  the start index and end index in the first seqid and the last seqid. Then
+    #  the process for the piece will process loci from first_seqid[start] to
+    #  last_seqid[end]. The info is recorded in a list. The list has
+    #  NUM_OF_CORE values. Each element of the list is an two element (A and B)
+    #  list. A is a list of all seq IDs for this piece (ordered). B is a 2-tuple
+    #  contains the start and the end index for this piece
+    num_each_piece = int(total_loci/dict_option["NUM_OF_CORE"]) + 1
+    piece_info = []
+    cur_piece = 0
+    cur_loci = 0
+    cur_pieceinfo = [[], [0,0]]
+    cur_start = 0
+    cur_end = 0
+    cur_id = 0
+    for seqID in sorted(dict_loci):
+        cur_id = seqID
+        cur_pieceinfo[0].append(seqID)
+        for idx, loci in enumerate(dict_loci[seqID]):
+            cur_loci += 1
+            if cur_loci < num_each_piece * (cur_piece + 1):
+                pass
+            else:
+                cur_end = idx
+                cur_pieceinfo[1][0] = cur_start
+                cur_pieceinfo[1][1] = cur_end
+                piece_info.append(cur_pieceinfo)
+                cur_start = idx
+                cur_pieceinfo = [[seqID], [cur_end,0]]
+                cur_piece += 1
+    if len(piece_info)<dict_option["NUM_OF_CORE"]:  # last piece
+        cur_pieceinfo[1][1] = len(dict_loci[cur_id])
+        piece_info.append(cur_pieceinfo)
 
     ###############debug###############
     tempgff = os.path.join(tmpdir,dict_option["NAME_PREFIX"]+"_ExRegionA.gff3")
@@ -864,7 +1031,7 @@ def gen_candidate_region_typeA(dict_contigs, dict_len, dict_option, tmpdir):
                 write_gff_line(seqID,extendedregion[0],extendedregion[1],"+",name,name,feature="ExRegionA",other=otherinfo,fout=fgff)
     fgff.close()
     ###################################
-    return dict_loci
+    return dict_loci, piece_info
 
 
 def samtools_view_region(sortedbamname, seqid, start, end):
@@ -1539,13 +1706,14 @@ def run_candidate(dict_option, outtempfolder, recovername):
     #if the length of a contig is smaller than min_contig_len, then ignore it
     min_contig_len = 19
     depthfilename, dict_contigs = gen_contig_typeA(expandedbam_plus,expandedbam_minus, dict_option, min_contig_len)
-    dict_loci = gen_candidate_region_typeA(dict_contigs,dict_len,dict_option,outtempfolder)
+    dict_loci, piece_info = gen_candidate_region_typeA(dict_contigs,dict_len,dict_option,outtempfolder)
     #  a list of (rnafoldinfasta, lociinfodump)  pairs
-    num_loci, num_fasta, retnames = dump_loci_seqs_and_alignment(dict_loci, combinedbamname,
-                                            dict_option["FASTA_FILE"],
-                                            rnalfoldinputprefix,
-                                            outputdumpprefix,
-                                            dict_option["NUM_OF_CORE"])
+    num_loci, num_fasta, retnames = dump_loci_seqs_and_alignment_multiprocess(dict_loci,
+                                                                              piece_info,
+                                                                              combinedbamname,
+                                                                              dict_option["FASTA_FILE"],
+                                                                              rnalfoldinputprefix,
+                                                                              outputdumpprefix)
 
     loci_dump_file = open(loci_dump_name, 'wb')
     cPickle.dump(dict_loci, loci_dump_file, protocol=2)

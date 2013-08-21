@@ -1,5 +1,6 @@
 import sys
 import os
+import multiprocessing
 import gc
 
 '''
@@ -23,6 +24,8 @@ if len(sys.argv) == 1:
     sys.stderr.write("Usage: python preocess-reads-fasta.py <fasta1> <fasta2> .. <fastaN>\n")
     sys.exit(-1)
 
+
+
 prefix = []
 for idx, name in enumerate(sys.argv[1:]):
     if not os.path.exists(name):
@@ -31,10 +34,9 @@ for idx, name in enumerate(sys.argv[1:]):
     prefix.append("S"+str(idx+1))
 
 
-
-for idx, name in enumerate(sys.argv[1:]):
+def process_one_file(name, prefix, queue):
+    sys.stdout.write("Start processing file "+name+"\n")
     dict_reads = {}
-    gc.collect()
     outf = open(name + ".processed", 'w')
     with open(name) as f:
         for line in f:
@@ -46,10 +48,24 @@ for idx, name in enumerate(sys.argv[1:]):
                     dict_reads[key] += 1
                 else:
                     dict_reads[key] = 1
-
     for cnt, r in enumerate(dict_reads):
-        identifier = ">"+prefix[idx]+"-"+str(cnt)+"-"+str(dict_reads[r])
+        identifier = ">"+prefix+"-"+str(cnt)+"-"+str(dict_reads[r])
         outf.write(identifier+"\n")
         outf.write(r+"\n")
     outf.close()
-    sys.stdout.write("Finished file "+name+"\n")
+    sys.stdout.write("Finish file "+name+"\n")
+    queue.put((name, len(dict_reads)))
+
+jobs = []
+inforqueue = multiprocessing.Queue()
+for idx, name in enumerate(sys.argv[1:]):
+    p = multiprocessing.Process(target=process_one_file, args=(name, prefix[idx]
+                                                               , inforqueue))
+    p.start()
+    jobs.append(p)
+
+for job in jobs:
+    job.join()
+    info = inforqueue.get()
+    sys.stdout.write("File " + info[0]+ " has "+ str(info[1]) + " unique reads\n")
+sys.stdout.write("DONE\n\n")

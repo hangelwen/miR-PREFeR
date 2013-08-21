@@ -41,7 +41,7 @@ The miR-PREFeR pipeline is hosted on Github (https://github.com/hangelwen/miR-PR
 
 This makes an directory named 'miR-PREFeR' in the current directory, and clones the newest version of the miR-PREFeR pipeline code into the directory. The pipeline is ready to use.
 
-If you do not have `git` on your system, simply go to <https://github.com/hangelwen/miR-PREFeR>, download a zip file by clicking 'Download ZIP', and unzip the file.
+If you do not have `git` on your system, simply go to <https://github.com/hangelwen/miR-PREFeR/releases>, download the zip file or the tar.gz file of the latest version.
 
 **The miR-PREFeR pipeline is still in active development, to be enable to use the newest features from the pipeline, it's better to check the  <https://github.com/hangelwen/miR-PREFeR> page and obtain the newest version.**
 

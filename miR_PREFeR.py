@@ -12,7 +12,7 @@ import tempfile
 import string
 import fileinput
 import gc
-
+import logging
 
 dict_failure_reasons = {1: "Structure is not stemloop",
                        2: "Mature-star duplex has too many bugles/interior loops",
@@ -56,7 +56,9 @@ command could be one of the following:
     fold = Fold the candidate regions and predict miRNAs.
     pipeline = Run the whole pipeline. This is the same as running 'check', 'prepare', 'candidate', 'fold' sequentially.
     recover = Recover a unfinished job. By default, miR-PREFeR makes checkpoint of the results of each stage. Thus, an unfinished job can be started from where it was checkpointed to save time.
-    """
+
+configfile: configuration file"""
+
     parser = OptionParser(helpstr)
     actions = ['check','prepare','candidate','fold','pipeline', 'recover']
     (options, args) = parser.parse_args()

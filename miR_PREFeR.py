@@ -1262,6 +1262,37 @@ def is_stem_loop(ss, minloopsize):
     else:
         return False
 
+def stemloop_or_onebifurcation(ss):
+    if is_stem_loop(ss, 3):
+        return True
+    # not an stem loop, but a structure with two bifurcation: (()()).
+    bifurcation = 0
+    stack = []
+    last = 'Push'
+    for idx, char in enumerate(ss):
+        if char == '(':
+            if idx !=0:
+                if not stack:
+                    if last == 'Pop': # ()() like structure
+                        return False
+                    last = "Push"
+                    stack.append(char)
+                else: # stack is not empty
+                    if last == "Pop":
+                        if bifurcation >= 1:
+                            return False
+                        else:
+                            bifurcation = 1
+                    stack.append(char)
+                    last = "Push"
+            else:
+                stack.append(char)
+                last = "Push"
+        elif char == ")":
+            last = "Pop"
+            stack.pop()
+    return True
+
 def pos_genome_2_local(genomestart, genomeend, strand, regionstart, regionend,
                        foldstart, foldend):
     '''
@@ -1487,6 +1518,8 @@ def check_loci(structures, matures, region, dict_aln, which):
         lowest_energy = 0
         outputinfo = []
         for energy, foldstart, ss in structures[1]:
+            if not stemloop_or_onebifurcation(ss):
+                continue
             if energy > lowest_energy:
                 continue
             else:

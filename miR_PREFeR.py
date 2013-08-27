@@ -1534,7 +1534,7 @@ def check_loci(structures, matures, region, dict_aln, which):
                                                 (structinfo[0],structinfo[1]),
                                                 strand)
                     if exprinfo[0]>0:  # has star expression
-                        if exprinfo[1] < 0.25:
+                        if exprinfo[1] < 0.20:
                             continue
                         else:
                             #  The last 'True' means this is an confident miRNA

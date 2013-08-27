@@ -535,7 +535,7 @@ def gen_contig_typeA(expandedbam_plus, expandedbam_minus, dict_option,
                     if plus_depth > minus_depth:
                         yield [pre_seqid, start_pos, pre_pos+1, "+"]
                     else:
-                        yield [pre_seqid, start_pos, pre_pos+1, "+"]
+                        yield [pre_seqid, start_pos, pre_pos+1, "-"]
                     plus_depth = seperate_depth[0]
                     minus_depth = seperate_depth[1]
                     start_pos = pos

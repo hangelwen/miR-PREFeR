@@ -1444,6 +1444,8 @@ def get_maturestar_info(ss, mature, foldstart, foldend, regionstart, regionend,
     star_duplex = ss[dict_bp[lastbp]: dict_bp[firstbp]]
     total_dots = mature_duplex.count(".") + star_duplex.count(".")
     total_bps = len(mature_duplex) - mature_duplex.count(".")
+    if total_bps<14:
+        return None
     # if prime5:  # the mature is on 5' arm
     #     print("5PRIME")
     #     start_unpaired_len = mature_local_pos[1]-1-lastbp
@@ -1458,8 +1460,8 @@ def get_maturestar_info(ss, mature, foldstart, foldend, regionstart, regionend,
     #     star_start = dict_bp[lastbp] - start_unpaired_len + 2
     #     star_end = dict_bp[firstbp] + end_unpaired_len + 2 + 1
     star_ss = ss[star_start: star_end]
-    #if star_ss.find("(") != -1 and star_ss.find("")!= -1:  # this could happen if the input ss in not a stem loop
-    #    return None
+    if star_ss.find("(") != -1 and star_ss.find(")")!= -1:  # this could happen if the input ss in not a stem loop
+        return None
     # convert local positions to genome positions.
     genome_star_start, genome_star_end = pos_local_2_genome(star_start,
                                                              star_end,
@@ -2032,7 +2034,7 @@ def check_loci_test(structures, matures, region, dict_aln, which):
     return miRNAs
 
 
-def test_loci(alndumpname, rnalfoldoutname, regionstart):
+def test_loci(alndumpname, rnalfoldoutname):
     list_miRNA_loci = []
     alnf = open(alndumpname)
     ss_generator = get_structures_next_extendregion(rnalfoldoutname, 60)
@@ -2088,7 +2090,7 @@ def test_check_loci(structures, matures, region, dict_aln, which):
             if energy > lowest_energy:
                 continue
             else:
-                structinfo = get_maturestar_info(ss, (m0,m1), foldstart,
+                structinfo = test_get_maturestar_info(ss, (m0,m1), foldstart,
                                                  foldstart+len(ss),
                                                  region[1][0],
                                                  region[1][1],
@@ -2123,3 +2125,102 @@ def test_check_loci(structures, matures, region, dict_aln, which):
         if outputinfo:  # the loci contains an miRNA
             miRNAs.append(outputinfo)
     return miRNAs
+
+
+
+def test_get_maturestar_info(ss, mature, foldstart, foldend, regionstart, regionend,
+                        strand):
+
+    '''
+    mature format is [maturestart, matureend) in GENOME coordinate.
+
+    Make sure the mature is in one arm of a stem.
+    '''
+
+    dict_bp = {}  #
+    stack = []
+    for idx, char in enumerate(ss):
+        if char =="(":
+            stack.append(idx)
+        if char == ")":
+            if len(stack) == 0:
+                return None
+            dict_bp[idx] = stack[-1]
+            dict_bp[stack[-1]] = idx
+            stack.pop()
+
+    # zero started
+    mature_local_pos = pos_genome_2_local(mature[0], mature[1], strand,
+                                          regionstart, regionend, foldstart,
+                                          foldend)
+    foldregion_genome = pos_local_2_genome(0, len(ss), strand,
+                                          regionstart, regionend, foldstart,
+                                          foldend)
+    # mature not in the fold region
+    if not (mature[0]>=foldregion_genome[0] and mature[1]<=foldregion_genome[1]):
+        return None
+
+    mature_ss = ss[mature_local_pos[0]:mature_local_pos[1]]
+    #  Not in a arm of a stem, return None. This should not happen given
+    #  that the mature is already in an arm of a stem.
+    if mature_ss.find("(")!=-1 and mature_ss.find(")")!=-1:
+        return None
+
+    #  local positions
+    star_start = 0
+    star_end = 0
+    star_ss = ""
+
+    firstbp = ss.find("(", mature_local_pos[0], mature_local_pos[1])
+    lastbp =  ss.rfind("(", mature_local_pos[0], mature_local_pos[1])
+    prime5 = True
+    if firstbp == -1:
+        firstbp = ss.find(")",mature_local_pos[0], mature_local_pos[1])
+        lastbp =  ss.rfind(")",mature_local_pos[0], mature_local_pos[1])
+        prime5 = False
+    if firstbp == -1:  # all are dots
+        return None
+
+    start_unpaired_len = mature_local_pos[1]-1-lastbp
+    end_unpaired_len = firstbp-mature_local_pos[0]
+    star_start = dict_bp[lastbp] -start_unpaired_len + 2
+    star_end = dict_bp[firstbp] + end_unpaired_len + 2 + 1  # +1 because the end pos is exclusive
+
+    #duplex is the region from first paired to the last paired
+    mature_duplex = ss[firstbp: lastbp]
+    star_duplex = ss[dict_bp[lastbp]: dict_bp[firstbp]]
+    total_dots = mature_duplex.count(".") + star_duplex.count(".")
+    total_bps = len(mature_duplex) - mature_duplex.count(".")
+    # if prime5:  # the mature is on 5' arm
+    #     print("5PRIME")
+    #     start_unpaired_len = mature_local_pos[1]-1-lastbp
+    #     end_unpaired_len = firstbp-mature_local_pos[0]
+    #     star_start = dict_bp[lastbp] -start_unpaired_len + 2
+    #     star_end = dict_bp[first] + end_unpaired_len + 2 + 1  # +1 because the end pos is exclusive
+    #     star_ss = ss[star_start:star_end]
+    # else:  # the mature is on 3' arm
+    #     print("3PRIME")
+    #     start_unpaired_len = mature_local_pos[1]-1-lastbp
+    #     end_unpaired_len = firstbp-mature_local_pos[0]
+    #     star_start = dict_bp[lastbp] - start_unpaired_len + 2
+    #     star_end = dict_bp[firstbp] + end_unpaired_len + 2 + 1
+    star_ss = ss[star_start: star_end]
+    if star_ss.find("(") != -1 and star_ss.find(")")!= -1:  # this could happen if the input ss in not a stem loop
+        return None
+    # convert local positions to genome positions.
+    genome_star_start, genome_star_end = pos_local_2_genome(star_start,
+                                                             star_end,
+                                                             strand,
+                                                             regionstart,
+                                                             regionend,
+                                                             foldstart,
+                                                             foldend)
+    #  return:
+    #  star start, star end in genome coordinate
+    #  foldregion start, end in genome coordinate
+    #  star structure
+    #  whether the mature is at the 5' arm of the folding sequence
+    #  mature structure
+    #  total number of unmatched bases in the duplex
+    #  total number of basepairs
+    return genome_star_start, genome_star_end, foldregion_genome[0], foldregion_genome[1], star_ss, prime5, mature_ss, total_dots, total_bps

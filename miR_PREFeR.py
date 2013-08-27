@@ -10,9 +10,9 @@ import os
 import distutils.spawn
 import tempfile
 import string
-import fileinput
 import gc
 import logging
+import shutil
 
 dict_failure_reasons = {1: "Structure is not stemloop",
                        2: "Mature-star duplex has too many bugles/interior loops",
@@ -47,7 +47,7 @@ def parse_option():
 
 def parse_option_optparse():
     from optparse import OptionParser
-    helpstr = """python mir_PREFeR.py [-h] [-l] command configfile
+    helpstr = """python mir_PREFeR.py [options] command configfile
 
 command could be one of the following:
     check = Check the dependency and the config file only (default).
@@ -62,6 +62,8 @@ configfile: configuration file"""
     parser = OptionParser(helpstr)
     parser.add_option("-l", "--log", action="store_true", dest="log",
                       help="Generate a log file.")
+    parser.add_option("-k", "--keep-tmp", action="store_true", dest="keeptmp",
+                      help="After finish the whole pipeline, do not remove the temporary folder that contains the intermidate files.")
     actions = ['check','prepare','candidate','fold','pipeline', 'recover']
     (options, args) = parser.parse_args()
     if len(args) != 2:
@@ -71,6 +73,7 @@ configfile: configuration file"""
     dict_option = parse_configfile(args[1])
     dict_option['ACTION'] = args[0]
     dict_option["LOG"] = options.log
+    dict_option["KEEPTMP"] = options.keeptmp
     return dict_option
 
 def parse_configfile(configfile):
@@ -1896,8 +1899,17 @@ def run_fold(dict_option, outtempfolder, recovername):
         logger.info("=========================Done (fold stage)=======================\n\n")
 
 
-def run_pipeline(dict_option, outtempfolder, recovername):
-    pass
+def run_removetmp(outtempfolder):
+    try:
+        write_formatted_string_withtime("Removing the temporary folder.", 30, sys.stdout)
+        shutil.rmtree(outtempfolder)
+        write_formatted_string("Temporary folder removed.\n", 30, sys.stdout)
+        return 0
+    except Exception as e:
+        sys.stderr.write(e)
+        sys.stderr.write("Error occurred when removing the tmp folder.\n")
+        sys.stderr.write("You can remove the folder by yourself.\n")
+        return 1
 
 
 if __name__ == '__main__':
@@ -1924,7 +1936,7 @@ if __name__ == '__main__':
 
     if dict_option['ACTION'] == 'check':
         run_check(dict_option, outtempfolder, recovername)
-        exit(-1)
+        exit(0)
 
     allgood = check_dependency()
     if not allgood:
@@ -1945,24 +1957,32 @@ if __name__ == '__main__':
         if logger:
             logger.info("ACTION is 'prepare'.")
         run_prepare(dict_option, outtempfolder, recovername)
-        exit(-1)
+        exit(0)
     if dict_option['ACTION'] == 'candidate':
         if logger:
             logger.info("ACTION is 'candidate'.")
         run_candidate(dict_option, outtempfolder, recovername)
-        exit(-1)
+        exit(0)
     if dict_option['ACTION'] == 'fold':
         if logger:
             logger.info("ACTION is 'fold'.")
         run_fold(dict_option, outtempfolder, recovername)
-        exit(-1)
+        if not dict_option["KEEPTMP"]:
+            run_removetmp(outtempfolder)
+            if logger:
+                logger.info("Temporary folder removed.")
+        exit(0)
     if dict_option['ACTION'] == 'pipeline':
         if logger:
             logger.info("ACTION is 'pipeline'.")
         run_prepare(dict_option, outtempfolder, recovername)
         run_candidate(dict_option, outtempfolder, recovername)
         run_fold(dict_option, outtempfolder, recovername)
-        exit(-1)
+        if not dict_option["KEEPTMP"]:
+            run_removetmp(outtempfolder)
+            if logger:
+                logger.info("Temporary folder removed.")
+        exit(0)
     if dict_option['ACTION'] == 'recover':
         if logger:
             logger.info("ACTION is 'recover'.")
@@ -1973,11 +1993,19 @@ if __name__ == '__main__':
             write_formatted_string("*** Starting the pipeline from stage 'candidate'.", 30, sys.stdout)
             run_candidate(dict_option, outtempfolder, recovername)
             run_fold(dict_option, outtempfolder, recovername)
+            if not dict_option["KEEPTMP"]:
+                run_removetmp(outtempfolder)
+                if logger:
+                    logger.info("Temporary folder removed.")
         elif last_stage == "candidate":
             write_formatted_string("*** Starting the pipeline from stage 'fold'.", 30, sys.stdout)
             run_fold(dict_option, outtempfolder, recovername)
+            if not dict_option["KEEPTMP"]:
+                run_removetmp(outtempfolder)
+                if logger:
+                    logger.info("Temporary folder removed.")
         elif last_stage == "fold":
             write_formatted_string("*** The pipeline has been finished on the input. No action is performed.\n", 30, sys.stdout)
         else:
             write_formatted_string_withtime("No recovery information found. Please run the pipeline in the 'pipeline' mode.\n", 30, sys.stdout)
-        exit(-1)
+        exit(0)

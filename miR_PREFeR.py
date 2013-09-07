@@ -26,14 +26,15 @@ def parse_option():
     helpstr = """    check = Check the dependency and the config file only (default).
     prepare = Prepare data.
     candidate = Generate candidate regions.
-    fold = Fold the candidate regions and predict miRNAs.
-    pipeline = Run the whole pipeline. This is the same as running 'check', 'prepare', 'candidate', 'fold' sequentially.
+    fold = Fold the candidate regions.
+    predict = Predict miRNAs.
+    pipeline = Run the whole pipeline. This is the same as running 'check', 'prepare', 'candidate', 'fold', 'predict' sequentially.
     recover = Recover a unfinished job. By default, miR-PREFeR makes checkpoint of the results of each stage. Thus, an unfinished job can be started from where it was checkpointed to save time.
     """
 
     parser = argparse.ArgumentParser(formatter_class=argparse.RawTextHelpFormatter)
     parser.add_argument("action",
-                        choices=('check','prepare','candidate','fold','pipeline', 'recover'),
+                        choices=('check','prepare','candidate','fold','predict','pipeline', 'recover'),
                         default = 'check', help = helpstr)
     parser.add_argument("configfile",
                         help="    Configure file.")
@@ -53,8 +54,9 @@ command could be one of the following:
     check = Check the dependency and the config file only (default).
     prepare = Prepare data.
     candidate = Generate candidate regions.
-    fold = Fold the candidate regions and predict miRNAs.
-    pipeline = Run the whole pipeline. This is the same as running 'check', 'prepare', 'candidate', 'fold' sequentially.
+    fold = Fold the candidate regions.
+    predict = Predict miRNAs.
+    pipeline = Run the whole pipeline. This is the same as running 'check', 'prepare', 'candidate', 'fold', and 'predict' sequentially.
     recover = Recover a unfinished job. By default, miR-PREFeR makes checkpoint of the results of each stage. Thus, an unfinished job can be started from where it was checkpointed to save time.
 
 configfile: configuration file"""
@@ -64,7 +66,7 @@ configfile: configuration file"""
                       help="Generate a log file.")
     parser.add_option("-k", "--keep-tmp", action="store_true", dest="keeptmp",
                       help="After finish the whole pipeline, do not remove the temporary folder that contains the intermidate files.")
-    actions = ['check','prepare','candidate','fold','pipeline', 'recover']
+    actions = ['check','prepare','candidate','fold', 'predict', 'pipeline', 'recover']
     (options, args) = parser.parse_args()
     if len(args) != 2:
          parser.error("incorrect number of arguments. Run the script with -h option to see help.")
@@ -1856,11 +1858,11 @@ def run_fold(dict_option, outtempfolder, recovername):
     logger = None
     if dict_option["LOG"]:
         logger = dict_option["LOGGER"]
-        logger.info("Starting folding and predicting miRNAs.")
+        logger.info("Starting folding candidate sequences.")
     if not previous_stage_saved(recovername, "candidate"):
         write_formatted_string_withtime("Error: can not start the pipeline from this stage, the files needed are not generated or have been removed/moved. Please run previous stages first, or run the pipeline in the recover mode to automatically continue from where the job was ceased.", 30, sys.stdout)
         exit(-1)
-    write_formatted_string_withtime("Starting folding and predicting miRNAs.", 30, sys.stdout)
+    write_formatted_string_withtime("Starting folding candidate sequences.", 30, sys.stdout)
     #now we know we can run this stage. First get file names from the last stage
     dict_recover = load_recover_file(recovername)
     if logger:
@@ -1870,6 +1872,39 @@ def run_fold(dict_option, outtempfolder, recovername):
                                   outtempfolder,
                                   dict_option,
                                   dict_option["PRECURSOR_LEN"])
+
+    if logger:
+        logger.info("Start writing recover infomation to the recovery file")
+    dict_recover["last_stage"] = "fold"
+    dict_recover["finished_stages"]["fold"] = {}
+    dict_recover["files"]["fold"] = []
+    dict_recover["finished_stages"]["fold"]["foldnames"] = foldnames
+    for name in foldnames:
+        dict_recover["files"]["fold"].append(name)
+    recoverfile = open(recovername,'w')
+    cPickle.dump(dict_recover,recoverfile)
+    if logger:
+        logger.info("Recovery file successfully updated.")
+    write_formatted_string_withtime("Done\n", 30, sys.stdout)
+    if logger:
+        logger.info("=========================Done (fold stage)=======================\n\n")
+
+
+def run_predict(dict_option, outtempfolder, recovername):
+    logger = None
+    if dict_option["LOG"]:
+        logger = dict_option["LOGGER"]
+        logger.info("Starting predicting miRNAs.")
+    if not previous_stage_saved(recovername, "fold"):
+        write_formatted_string_withtime("Error: can not start the pipeline from this stage, the files needed are not generated or have been removed/moved. Please run previous stages first, or run the pipeline in the recover mode to automatically continue from where the job was ceased.", 30, sys.stdout)
+        exit(-1)
+    write_formatted_string_withtime("Starting predicting miRNAs.", 30, sys.stdout)
+    #now we know we can run this stage. First get file names from the last stage
+    dict_recover = load_recover_file(recovername)
+    if logger:
+        logger.info("Predicting microRNAs. "+
+                    str(dict_option["NUM_OF_CORE"]) + " parallel processes.")
+    foldnames = dict_recover["finished_stages"]["fold"]["foldnames"]
     result = gen_miRNA_loci_nopredict(dict_recover["finished_stages"]["candidate"]["infodump"],
                                       foldnames, 60, logger)
     gffname = os.path.join(dict_option["OUTFOLDER"],dict_option["NAME_PREFIX"]+"_miRNA.gff3")
@@ -1878,14 +1913,11 @@ def run_fold(dict_option, outtempfolder, recovername):
     gen_gff_from_result(result,gffname)
     if logger:
         logger.info("Start writing recover infomation to the recovery file")
-    dict_recover["last_stage"] = "fold"
-    dict_recover["finished_stages"]["fold"] = {}
-    dict_recover["files"]["fold"] = []
-    dict_recover["finished_stages"]["fold"]["foldnames"] = foldnames
-    dict_recover["finished_stages"]["fold"]["gffname"] = gffname
-    for name in foldnames:
-        dict_recover["files"]["fold"].append(name)
-    dict_recover["files"]["fold"].append(gffname)
+    dict_recover["last_stage"] = "predict"
+    dict_recover["finished_stages"]["predict"] = {}
+    dict_recover["files"]["predict"] = []
+    dict_recover["finished_stages"]["predict"]["gffname"] = gffname
+    dict_recover["files"]["predict"].append(gffname)
     recoverfile = open(recovername,'w')
     cPickle.dump(dict_recover,recoverfile)
     if logger:
@@ -1896,7 +1928,7 @@ def run_fold(dict_option, outtempfolder, recovername):
     if logger:
         logger.info(outstr)
     if logger:
-        logger.info("=========================Done (fold stage)=======================\n\n")
+        logger.info("=========================Done (predict stage)=======================\n\n")
 
 
 def run_removetmp(outtempfolder):
@@ -1967,6 +1999,11 @@ if __name__ == '__main__':
         if logger:
             logger.info("ACTION is 'fold'.")
         run_fold(dict_option, outtempfolder, recovername)
+        exit(0)
+    if dict_option['ACTION'] == 'predict':
+        if logger:
+            logger.info("ACTION is 'predict'.")
+        run_predict(dict_option, outtempfolder, recovername)
         if not dict_option["KEEPTMP"]:
             run_removetmp(outtempfolder)
             if logger:
@@ -1978,6 +2015,7 @@ if __name__ == '__main__':
         run_prepare(dict_option, outtempfolder, recovername)
         run_candidate(dict_option, outtempfolder, recovername)
         run_fold(dict_option, outtempfolder, recovername)
+        run_predict(dict_option, outtempfolder, recovername)
         if not dict_option["KEEPTMP"]:
             run_removetmp(outtempfolder)
             if logger:
@@ -2000,11 +2038,14 @@ if __name__ == '__main__':
         elif last_stage == "candidate":
             write_formatted_string("*** Starting the pipeline from stage 'fold'.", 30, sys.stdout)
             run_fold(dict_option, outtempfolder, recovername)
+        elif last_stage == "fold":
+            write_formatted_string("*** Starting the pipeline from stage 'predict'.", 30, sys.stdout)
+            run_predict(dict_option, outtempfolder, recovername)
             if not dict_option["KEEPTMP"]:
                 run_removetmp(outtempfolder)
                 if logger:
                     logger.info("Temporary folder removed.")
-        elif last_stage == "fold":
+        elif last_stage == "predict":
             write_formatted_string("*** The pipeline has been finished on the input. No action is performed.\n", 30, sys.stdout)
         else:
             write_formatted_string_withtime("No recovery information found. Please run the pipeline in the 'pipeline' mode.\n", 30, sys.stdout)

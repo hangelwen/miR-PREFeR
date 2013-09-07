@@ -1622,6 +1622,24 @@ def gen_miRNA_loci_nopredict(alndumpnames, rnalfoldoutnames, minlen, logger,
     return finalresult
 
 
+def get_mature_stemloop_seq(seqid, mstart, mend, start, end, fastaname):
+    region1 = seqid+":"+str(mstart)+"-"+str(mend)
+    region2 = seqid+":"+str(start)+"-"+str(end)
+    mature_command = "samtools faidx " + fastaname + " " +region1
+    stemloop_command = "samtools faidx " + fastaname + " " +region2
+    try:
+        samtools_process = subprocess.Popen(mature_command.split(), stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        outmessage, outerr = samtools_process.communicate()
+        mature_seq = str("".join(outmessage.decode().split("\n")[1:]))
+        samtools_process = subprocess.Popen(stemloop_command.split(), stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        outmessage, outerr = samtools_process.communicate()
+        stemloop_seq = str("".join(outmessage.decode().split("\n")[1:]))
+    except Exception as e:
+        sys.stderr.write(e)
+        sys.stderr.write("Error occurred when indexing the genome file\n")
+        sys.exit(-1)
+    return region1, mature_seq, region2, stemloop_seq
+
 def gen_gff_from_result(resultlist, gffname):
     f = open(gffname, 'w')
     resultlist.sort()
@@ -1633,6 +1651,28 @@ def gen_gff_from_result(resultlist, gffname):
         write_gff_line(mirna[0],mirna[3],mirna[4]-1,mirna[-2],maturename,
                        maturename, feature="miRNA",fout=f)
     f.close()
+
+def gen_mirna_fasta_from_result(resultlist, maturename, stemloopname, fastaname):
+    f1 = open(maturename, 'w')
+    f2 = open(stemloopname, 'w')
+    for idx, mirna in enumerate(resultlist):
+        maturename = "miRNA_" + str(idx)
+        mirname = "miRNA-stemloop_" + str(idx)
+        seqs = get_mature_stemloop_seq(mirna[0],mirna[3], mirna[4]-1, mirna[1], mirna[2]-1, fastaname)
+        matureid = ">" + seqs[0] + " " + mirna[-2]+ " " + mirname
+        stemloopid = ">" + seqs[2] + " " + mirna[-2]+ " " + mirname
+        matureseq = seqs[1].upper().replace("T", "U")
+        stemloopseq = seqs[3].upper().replace("T", "U")
+        if mirna[-2] == "-":
+            matureseq = get_reverse_complement(matureseq)
+            stemloopseq = get_reverse_complement(stemloopseq)
+        f1.write(matureid+"\n")
+        f1.write(matureseq+"\n")
+        f2.write(stemloopid+"\n")
+        f2.write(stemloopseq+"\n")
+    f1.close()
+    f2.close()
+
 def fold_use_RNALfold(inputfastalist, tempfolder, dict_option, maxspan):
     '''
     Fold the sequences using RNALfold and write results to outputname file.
@@ -1908,16 +1948,26 @@ def run_predict(dict_option, outtempfolder, recovername):
     result = gen_miRNA_loci_nopredict(dict_recover["finished_stages"]["candidate"]["infodump"],
                                       foldnames, 60, logger)
     gffname = os.path.join(dict_option["OUTFOLDER"],dict_option["NAME_PREFIX"]+"_miRNA.gff3")
+    maturename = os.path.join(dict_option["OUTFOLDER"],dict_option["NAME_PREFIX"]+"_miRNA.mature.fa")
+    stemloopname = os.path.join(dict_option["OUTFOLDER"],dict_option["NAME_PREFIX"]+"_miRNA.stemloop.fa")
     if logger:
         logger.info("Generating a gff file contains all predictions. GFF file name: " + gffname)
     gen_gff_from_result(result,gffname)
+    if logger:
+        logger.info("Generating two fasta files contains predicted mature sequences and stem-loop sequences. Fasta file names: [mature]: " +
+                    maturename + ", [stem-loop]: " + stemloopname)
+    gen_mirna_fasta_from_result(result, maturename, stemloopname, dict_option["FASTA_FILE"])
     if logger:
         logger.info("Start writing recover infomation to the recovery file")
     dict_recover["last_stage"] = "predict"
     dict_recover["finished_stages"]["predict"] = {}
     dict_recover["files"]["predict"] = []
     dict_recover["finished_stages"]["predict"]["gffname"] = gffname
+    dict_recover["finished_stages"]["predict"]["maturename"] = maturename
+    dict_recover["finished_stages"]["predict"]["stemloopname"] = stemloopname
     dict_recover["files"]["predict"].append(gffname)
+    dict_recover["files"]["predict"].append(maturename)
+    dict_recover["files"]["predict"].append(stemloopname)
     recoverfile = open(recovername,'w')
     cPickle.dump(dict_recover,recoverfile)
     if logger:

@@ -1,6 +1,7 @@
 import sys
 import os.path
 import multiprocessing
+import Queue
 import cPickle
 import time
 import re
@@ -1608,6 +1609,7 @@ def gen_miRNA_loci_nopredict(alndumpnames, rnalfoldoutnames, minlen, logger,
         for mir in mir_generator:
             mirnas.append(mir)
         queue.put(mirnas)
+        queue.put("done")
         queue.close()
     miRNAqueue = multiprocessing.Queue()
     jobs = []
@@ -1616,11 +1618,24 @@ def gen_miRNA_loci_nopredict(alndumpnames, rnalfoldoutnames, minlen, logger,
         p = multiprocessing.Process(target = gen_miRNA_loci_local, args=(miRNAqueue, alndumpnames[i], rnalfoldoutnames[i],minlen))
         p.start()
         jobs.append(p)
-    for job in jobs:
-        job.join()
-        mirnas = miRNAqueue.get()
-        for mirna in mirnas:
-            finalresult.append(mirna[0])
+
+    num_joined = 0
+    while True:
+        try:
+            if num_joined == len(jobs):
+                for job in jobs:
+                    job.join()
+                break
+            result = miRNAqueue.get_nowait()
+            if result == "done":
+                num_joined += 1
+            else:
+                for mirna in result:
+                    finalresult.append(mirna[0])
+        except Queue.Empty:
+            time.sleep(5)
+            continue
+
     return finalresult
 
 

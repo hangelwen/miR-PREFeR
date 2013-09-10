@@ -936,6 +936,8 @@ def dump_loci_seqs_and_alignment_multiprocess(dict_loci, piece_info_list,
         fout.close()
         foutdump.close()
         queue.put(((outputfastaname, outputalnname), num_loci, num_seq))
+        queue.close()
+
     if logger:
         logger.info("Generating candidate loci fasta sequences and loci reads alignment information. "
                     +str(len(piece_info_list))+" parallel processes.")
@@ -1606,7 +1608,7 @@ def gen_miRNA_loci_nopredict(alndumpnames, rnalfoldoutnames, minlen, logger,
         for mir in mir_generator:
             mirnas.append(mir)
         queue.put(mirnas)
-
+        queue.close()
     miRNAqueue = multiprocessing.Queue()
     jobs = []
     finalresult = []

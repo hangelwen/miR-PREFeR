@@ -482,11 +482,14 @@ def prepare_data(dict_option, outtempfolder, logger):
         sam2bam(samname, bamname)
         bamfiles.append(bamname)
 
-    #combine multiple BAM files from multiple sample together
-    if logger:
-        logger.info("Combining multiple BAM files from multiple samples together.")
     combinedbamname = os.path.join(outtempfolder, "combined.bam")
-    combine_bamfiles(dict_option["ALIGNMENT_FILE"][0], combinedbamname, *bamfiles)
+    if len(bamfiles) > 1:
+        #combine multiple BAM files from multiple sample together
+        if logger:
+            logger.info("Combining multiple BAM files from multiple samples together.")
+        combine_bamfiles(dict_option["ALIGNMENT_FILE"][0], combinedbamname, *bamfiles)
+    else:
+        shutil.copyfile(bamfiles[0], combinedbamname)
 
     #removing reads that are overlapped with features in the gff file, if provided.
     if os.path.exists(dict_option["GFF_FILE"]):

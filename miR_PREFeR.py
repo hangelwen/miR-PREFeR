@@ -1224,16 +1224,13 @@ def test_mature_region(dict_loci, dict_option, sortedbamname, outputname):
 #  Structure related functions
 ########################################################################
 
-def get_structures_next_extendregion(rnalfoldoutname, minlen, filter=False,
+def get_structures_next_extendregion(rnalfoldoutname, minlen,
                                      minloop=3):
     '''
     Parse the RNALfold output file, return a list of (0/L/R, structure,
     norm_energy) tuples for an extend region each time (generator).
 
     Structure whose length is shorter than minlen are filtered.
-
-    If filter=True, then structures which are not stem loop, or the loop size is
-    smaller than minloop, are filtered.
 
     '''
 
@@ -1255,7 +1252,7 @@ def get_structures_next_extendregion(rnalfoldoutname, minlen, filter=False,
                 if len(sp) >=3:  # structure line
                     if len(sp[0]) < minlen:
                         continue
-                    elif (not is_stem_loop(sp[0],minloop)) & filter:
+                    elif (not is_stem_loop(sp[0],minloop)) and (not has_one_good_bifurcation(sp[0])):
                         continue
                     norm_energy = energypattern.search(line).group(1)
                     norm_energy = float(norm_energy)/len(sp[0])
@@ -1273,13 +1270,17 @@ def is_stem_loop(ss, minloopsize):
     else:
         return False
 
-def stemloop_or_onebifurcation(ss):
-    if is_stem_loop(ss, 3):
-        return True
+
+def has_one_good_bifurcation(ss):
     # not an stem loop, but a structure with two bifurcation: (()()).
     bifurcation = 0
     stack = []
     last = 'Push'
+    stack_pos = []
+    first_bi_last = 0
+    second_bi_first = 0
+    last_pos = 0
+    dict_pos = {}
     for idx, char in enumerate(ss):
         if char == '(':
             if idx !=0:
@@ -1288,21 +1289,38 @@ def stemloop_or_onebifurcation(ss):
                         return False
                     last = "Push"
                     stack.append(char)
+                    stack_pos.append(idx)
+                    last_pos = idx
                 else: # stack is not empty
                     if last == "Pop":
                         if bifurcation >= 1:
                             return False
                         else:
                             bifurcation = 1
+                            first_bi_last = last_pos
+                            second_bi_first = idx
                     stack.append(char)
                     last = "Push"
+                    stack_pos.append(idx)
+                    last_pos = idx
             else:
                 stack.append(char)
                 last = "Push"
+                stack_pos.append(idx)
+                last_pos = idx
         elif char == ")":
             last = "Pop"
             stack.pop()
-    return True
+            v = stack_pos.pop()
+            dict_pos[idx] = v
+            dict_pos[v] = idx
+            last_pos = idx
+    if float(dict_pos[second_bi_first]-dict_pos[first_bi_last])/len(ss) < 0.5:
+        if float(dict_pos[first_bi_last])/len(ss) > 0.25:
+            if float(dict_pos[second_bi_first])/len(ss) < 0.75:
+                return True
+    return False
+
 
 def pos_genome_2_local(genomestart, genomeend, strand, regionstart, regionend,
                        foldstart, foldend):
@@ -1531,8 +1549,6 @@ def check_loci(structures, matures, region, dict_aln, which):
         lowest_energy = 0
         outputinfo = []
         for energy, foldstart, ss in structures[1]:
-            if not stemloop_or_onebifurcation(ss):
-                continue
             if energy > lowest_energy:
                 continue
             else:
@@ -1547,7 +1563,7 @@ def check_loci(structures, matures, region, dict_aln, which):
                                                 (structinfo[0],structinfo[1]),
                                                 strand)
                     if exprinfo[0]>0:  # has star expression
-                        if exprinfo[1] < 0.10:
+                        if exprinfo[1] < 0.15:
                             continue
                         else:
                             #  The last 'True' means this is an confident miRNA
@@ -1556,7 +1572,7 @@ def check_loci(structures, matures, region, dict_aln, which):
                                           structinfo[1], ss, strand, True]
                             lowest_energy = energy
                     else:  #  no star expression
-                        if exprinfo[1] >=0.8 and exprinfo[2] > 5000:  # but very high expression
+                        if exprinfo[1] >=0.8 and exprinfo[2] > 1000:  # but very high expression
                             #  The last 'False' means this is not an confident miRNA
                             outputinfo = [region[0], structinfo[2],
                                           structinfo[3], m0, m1, structinfo[0],
@@ -1567,11 +1583,11 @@ def check_loci(structures, matures, region, dict_aln, which):
     return miRNAs
 
 
-def filter_next_loci(alndumpname, rnalfoldoutname, minlen=50, filterstemloop=False):
+def filter_next_loci(alndumpname, rnalfoldoutname, minlen=50):
     list_miRNA_loci = []
     alnf = open(alndumpname)
-    ss_generator = get_structures_next_extendregion(rnalfoldoutname, minlen,
-                                                    filter=filterstemloop)
+    ss_generator = get_structures_next_extendregion(rnalfoldoutname, minlen)
+
     while True:
         region = None
         which = None
@@ -1601,13 +1617,12 @@ def filter_next_loci(alndumpname, rnalfoldoutname, minlen=50, filterstemloop=Fal
                     yield miRNAsR
                 continue
 
-def gen_miRNA_loci_nopredict(alndumpnames, rnalfoldoutnames, minlen, logger,
-                             filterstemloop=False):
-    def gen_miRNA_loci_local(queue, alndumpname, rnalfoldoutname, minlen,
-                             filterstemloop=False):
+def gen_miRNA_loci_nopredict(alndumpnames, rnalfoldoutnames, minlen, logger):
+
+    def gen_miRNA_loci_local(queue, alndumpname, rnalfoldoutname, minlen):
         mir_generator = filter_next_loci( alndumpname, rnalfoldoutname,
-                                          minlen=minlen,
-                                          filterstemloop=filterstemloop)
+                                          minlen=minlen)
+
         mirnas = []
         for mir in mir_generator:
             mirnas.append(mir)

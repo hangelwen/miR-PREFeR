@@ -1533,9 +1533,7 @@ def get_maturestar_info(ss, mature, foldstart, foldend, regionstart, regionend,
     total_bps = len(mature_duplex) - mature_duplex.count(".")
     if total_bps<14:
         return None
-    loops, bulges = stat_duplex(mature_duplex, star_duplex)
-    if not pass_stat_duplex(loops, bulges):
-        return None
+
     # if prime5:  # the mature is on 5' arm
     #     print("5PRIME")
     #     start_unpaired_len = mature_local_pos[1]-1-lastbp
@@ -1551,6 +1549,9 @@ def get_maturestar_info(ss, mature, foldstart, foldend, regionstart, regionend,
     #     star_end = dict_bp[firstbp] + end_unpaired_len + 2 + 1
     star_ss = ss[star_start: star_end]
     if star_ss.find("(") != -1 and star_ss.find(")")!= -1:  # this could happen if the input ss in not a stem loop
+        return None
+    loops, bulges = stat_duplex(mature_duplex, star_duplex)
+    if not pass_stat_duplex(loops, bulges):
         return None
     # convert local positions to genome positions.
     genome_star_start, genome_star_end = pos_local_2_genome(star_start,

@@ -1738,6 +1738,9 @@ def gen_mirna_fasta_ss_from_result(resultlist, maturename, stemloopname,
             matureseq = get_reverse_complement(matureseq)
             stemloopseq = get_reverse_complement(stemloopseq)
             structure = structure[::-1]
+            structure = structure.replace('(','<')
+            structure = structure.replace(')','(')
+            structure = structure.replace('<',')')
             seq_dot = seq_dot[::-1]
         f1.write(matureid+"\n")
         f1.write(matureseq+"\n")

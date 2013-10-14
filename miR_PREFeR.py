@@ -1468,6 +1468,14 @@ def get_maturestar_info(ss, mature, foldstart, foldend, regionstart, regionend,
     star_start = dict_bp[lastbp] -start_unpaired_len + 2
     star_end = dict_bp[firstbp] + end_unpaired_len + 2 + 1  # +1 because the end pos is exclusive
 
+    #mature and star could overlap...
+    if mature_local_pos[0] <= star_start:
+        if star_start - mature_local_pos[1] < 3:
+            return None
+    if star_start <= mature_local_pos[0]:
+        if mature_local_pos[0] - star_end<3:
+            return None
+
     #duplex is the region from first paired to the last paired
     mature_duplex = ss[firstbp: lastbp]
     star_duplex = ss[dict_bp[lastbp]: dict_bp[firstbp]]
@@ -1711,21 +1719,26 @@ def gen_mirna_fasta_ss_from_result(resultlist, maturename, stemloopname,
         matureend = mirna[4] - mirna[1]
         starstart = mirna[5] - mirna[1]
         starend = mirna[6] - mirna[1]
+        mature_M = "M" * (matureend - maturestart)
+        star_S = "S" * (starend - starstart)
         seq_dot = ""
-        for i in range(maturestart):
-            seq_dot = seq_dot + "."
-        for i in range(maturestart, matureend+1):
-            seq_dot = seq_dot + "M"
-        for i in range(matureend+1, starstart):
-            seq_dot = seq_dot + "."
-        for i in range(starstart, starend+1):
-            seq_dot = seq_dot + "S"
-        for i in range(starend+1, len(seqs)+1):
-            seq_dot = seq_dot + "."
+        if maturestart < starstart:
+            seq_dot = seq_dot + "." * maturestart
+            seq_dot = seq_dot + mature_M
+            seq_dot = seq_dot + "." * (starstart-matureend)
+            seq_dot = seq_dot + star_S
+            seq_dot = seq_dot + "." * (len(stemloopseq)-starend)
+        else:
+            seq_dot = seq_dot + "." * starstart
+            seq_dot = seq_dot + star_S
+            seq_dot = seq_dot + "." * (maturestart-starend)
+            seq_dot = seq_dot + mature_M
+            seq_dot = seq_dot + "." * (len(stemloopseq)-matureend)
         if mirna[-2] == "-":
             matureseq = get_reverse_complement(matureseq)
             stemloopseq = get_reverse_complement(stemloopseq)
             structure = structure[::-1]
+            seq_dot = seq_dot[::-1]
         f1.write(matureid+"\n")
         f1.write(matureseq+"\n")
         f2.write(stemloopid+"\n")
@@ -1736,7 +1749,7 @@ def gen_mirna_fasta_ss_from_result(resultlist, maturename, stemloopname,
         f3.write(seq_dot+"\n")
     f1.close()
     f2.close()
-
+    f3.close()
 
 
 def fold_use_RNALfold(inputfastalist, tempfolder, dict_option, maxspan):

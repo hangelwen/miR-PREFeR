@@ -1676,6 +1676,7 @@ def get_mature_stemloop_seq(seqid, mstart, mend, start, end, fastaname):
     return region1, mature_seq, region2, stemloop_seq
 
 def gen_gff_from_result(resultlist, gffname):
+
     f = open(gffname, 'w')
     resultlist.sort()
     for idx, mirna in enumerate(resultlist):
@@ -1687,9 +1688,16 @@ def gen_gff_from_result(resultlist, gffname):
                        maturename, feature="miRNA",fout=f)
     f.close()
 
-def gen_mirna_fasta_from_result(resultlist, maturename, stemloopname, fastaname):
+def gen_mirna_fasta_ss_from_result(resultlist, maturename, stemloopname,
+                                   fastaname, ssname):
+    '''
+    Each result:
+    Seqid, locus_start, locus_end, mature_start, mature_end, star_start
+    star_end, structure, strand, star_present
+    '''
     f1 = open(maturename, 'w')
     f2 = open(stemloopname, 'w')
+    f3 = open(ssname, 'w')
     for idx, mirna in enumerate(resultlist):
         maturename = "miRNA_" + str(idx)
         mirname = "miRNA-stemloop_" + str(idx)
@@ -1698,15 +1706,38 @@ def gen_mirna_fasta_from_result(resultlist, maturename, stemloopname, fastaname)
         stemloopid = ">" + seqs[2] + " " + mirna[-2]+ " " + mirname
         matureseq = seqs[1].upper().replace("T", "U")
         stemloopseq = seqs[3].upper().replace("T", "U")
+        structure = mirna[-3]
+        maturestart = mirna[3] - mirna[1]
+        matureend = mirna[4] - mirna[1]
+        starstart = mirna[5] - mirna[1]
+        starend = mirna[6] - mirna[1]
+        seq_dot = ""
+        for i in range(maturestart):
+            seq_dot = seq_dot + "."
+        for i in range(maturestart, matureend+1):
+            seq_dot = seq_dot + "M"
+        for i in range(matureend+1, starstart):
+            seq_dot = seq_dot + "."
+        for i in range(starstart, starend+1):
+            seq_dot = seq_dot + "S"
+        for i in range(starend+1, len(seqs)+1):
+            seq_dot = seq_dot + "."
         if mirna[-2] == "-":
             matureseq = get_reverse_complement(matureseq)
             stemloopseq = get_reverse_complement(stemloopseq)
+            structure = structure[::-1]
         f1.write(matureid+"\n")
         f1.write(matureseq+"\n")
         f2.write(stemloopid+"\n")
         f2.write(stemloopseq+"\n")
+        f3.write(stemloopid+"\n")
+        f3.write(stemloopseq+"\n")
+        f3.write(structure+"\n")
+        f3.write(seq_dot+"\n")
     f1.close()
     f2.close()
+
+
 
 def fold_use_RNALfold(inputfastalist, tempfolder, dict_option, maxspan):
     '''
@@ -1985,13 +2016,14 @@ def run_predict(dict_option, outtempfolder, recovername):
     gffname = os.path.join(dict_option["OUTFOLDER"],dict_option["NAME_PREFIX"]+"_miRNA.gff3")
     maturename = os.path.join(dict_option["OUTFOLDER"],dict_option["NAME_PREFIX"]+"_miRNA.mature.fa")
     stemloopname = os.path.join(dict_option["OUTFOLDER"],dict_option["NAME_PREFIX"]+"_miRNA.stemloop.fa")
+    ssname = os.path.join(dict_option["OUTFOLDER"],dict_option["NAME_PREFIX"]+"_miRNA.stemloop.ss")
     if logger:
         logger.info("Generating a gff file contains all predictions. GFF file name: " + gffname)
     gen_gff_from_result(result,gffname)
     if logger:
         logger.info("Generating two fasta files contains predicted mature sequences and stem-loop sequences. Fasta file names: [mature]: " +
                     maturename + ", [stem-loop]: " + stemloopname)
-    gen_mirna_fasta_from_result(result, maturename, stemloopname, dict_option["FASTA_FILE"])
+    gen_mirna_fasta_ss_from_result(result, maturename, stemloopname, dict_option["FASTA_FILE"], ssname)
     if logger:
         logger.info("Start writing recover infomation to the recovery file")
     dict_recover["last_stage"] = "predict"

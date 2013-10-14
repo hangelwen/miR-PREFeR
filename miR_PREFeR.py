@@ -1472,10 +1472,13 @@ def get_maturestar_info(ss, mature, foldstart, foldend, regionstart, regionend,
     if mature_local_pos[0] <= star_start:
         if star_start - mature_local_pos[1] < 3:
             return None
+        if star_end > len(ss):
+            return None
     if star_start <= mature_local_pos[0]:
         if mature_local_pos[0] - star_end<3:
             return None
-
+        if star_start < 0:
+            return None
     #duplex is the region from first paired to the last paired
     mature_duplex = ss[firstbp: lastbp]
     star_duplex = ss[dict_bp[lastbp]: dict_bp[firstbp]]

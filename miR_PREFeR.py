@@ -1527,9 +1527,8 @@ def get_maturestar_info(ss, mature, foldstart, foldend, regionstart, regionend,
             return None
         if star_start < 0:
             return None
-    #duplex is the region from first paired to the last paired
-    mature_duplex = ss[firstbp: lastbp]
-    star_duplex = ss[dict_bp[lastbp]: dict_bp[firstbp]]
+    mature_duplex = ss[mature_local_pos[0]: mature_local_pos[1]-2]
+    star_duplex = ss[star_start:star_end-2]
     total_dots = mature_duplex.count(".") + star_duplex.count(".")
     total_bps = len(mature_duplex) - mature_duplex.count(".")
     if total_bps<14:

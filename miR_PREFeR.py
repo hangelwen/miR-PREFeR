@@ -1409,6 +1409,54 @@ def pos_local_2_genome(localstart, localend, strand, regionstart, regionend,
     else:
         return (regionend-foldstart-localend+1, regionend-foldstart-localstart+1)
 
+def stat_duplex(mature, star):
+    dict_bp = {}
+    ss = mature + star
+    openpos = ss.find("(")
+    closepos = ss.find(")")
+    openchar = "("
+    closechar = ")"
+    bulges = []
+    loops = []
+    if openpos > closepos:
+        openchar = ")"
+        closechar = "("
+    stack = []
+    for idx, char in enumerate(ss):
+        if char == openchar:
+            stack.append(idx)
+        elif char == closechar:
+            pos = stack.pop()
+            dict_bp[pos] = idx
+    keys =  sorted(dict_bp.keys())
+    for i in range(len(keys)-1):
+        if (keys[i+1]-keys[i]==1) and (dict_bp[keys[i]]-dict_bp[keys[i+1]]==1):
+            continue
+        else:
+            maturebulgesize = keys[i+1]-keys[i]-1
+            starbulgesize = dict_bp[keys[i]]-dict_bp[keys[i+1]]-1
+            if maturebulgesize == starbulgesize:
+                loops.append(maturebulgesize)
+            else:
+                bulges.append((maturebulgesize, starbulgesize))
+    return loops, bulges
+
+def pass_stat_duplex(loops, bulges):
+    total = len(loops) + len(bulges)
+    if total > 5:
+        return False
+    num_loop_bigger_than_three = 0
+    num_bulge_bigger_than_three = 0
+    for size in loops:
+        if size >= 4:
+            num_loop_bigger_than_three += 1
+    for size1, size2 in bulges:
+        if size1>=4 or size2>=4:
+            num_bulge_bigger_than_three += 1
+    if num_loop_bigger_than_three >1 or num_bulge_bigger_than_three >0:
+        return False
+    return True
+
 
 def get_maturestar_info(ss, mature, foldstart, foldend, regionstart, regionend,
                         strand):
@@ -1485,6 +1533,9 @@ def get_maturestar_info(ss, mature, foldstart, foldend, regionstart, regionend,
     total_dots = mature_duplex.count(".") + star_duplex.count(".")
     total_bps = len(mature_duplex) - mature_duplex.count(".")
     if total_bps<14:
+        return None
+    loops, bulges = stat_duplex(mature_duplex, star_duplex)
+    if not pass_stat_duplex(loops, bulges):
         return None
     # if prime5:  # the mature is on 5' arm
     #     print("5PRIME")

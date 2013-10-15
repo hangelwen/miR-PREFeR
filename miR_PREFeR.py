@@ -1495,6 +1495,9 @@ def get_maturestar_info(ss, mature, foldstart, foldend, regionstart, regionend,
     #  that the mature is already in an arm of a stem.
     if mature_ss.find("(")!=-1 and mature_ss.find(")")!=-1:
         return None
+    if len(mature_ss) - mature_ss.count(".") <14:
+        return None
+
 
     #  local positions
     star_start = 0

@@ -116,7 +116,12 @@ With the configuration file ready, the pipeline can be used to predict miRNA loc
 
     python miR_PREFeR.py [options] command configfile
 
-Where `command` could be one of `check`, `pipeline`, `prepare`, `candidate`, `fold`, `predict`, and `recover`. (Run `python miR_PREFeR.py -h` to see help on options and commands.)
+Currently, the following options are avalible:
+1. **-h**: Show help information.
+2. **-l**: Generate a log file. From the log file you can find the status during the running of the pipeline. **Recommend to always use this option.**
+3. **-k**: After finish the whole pipeline, do not remove the temporary folder that contains the intermediate files. This will save disk space. If it's not specified, you can delete the temporary folder after get the result.
+
+`command` could be one of `check`, `pipeline`, `prepare`, `candidate`, `fold`, `predict`, and `recover`. (Run `python miR_PREFeR.py -h` to see help on options and commands.)
 
 1. **check:** Check the presence of the depended programs (RNALfold and samtools), and check the recovery information (Shows which stage the previous computation on the same data was ceased. See the `recover` command in 6.).
 2. **pipeline:** Run the whole pipeline. That is, run `prepare`, `candidate`,`fold` and `predict` sequentially. This is the normal way to run miR-PREFeR.
@@ -126,7 +131,7 @@ Where `command` could be one of `check`, `pipeline`, `prepare`, `candidate`, `fo
 6. **predict:** Predict miRNA loci. This step can ONLY be run if the `prepare`, `candidate` and `fold` steps have been finished on the configfile file.
 7. **recover:** Tries its best to recover an unfinished job and continues to run from the unfinished step it was ceased. This is designed to easily continue a job other than re-run the whole pipeline from start. For example, if a job was kill half way (This happens sometime. For example, the job takes too long time and the user killed it. Or, if the job was run on an Cluster and was killed halfway because some resources exceed the max values.) In these cases, one does not need to run the pipeline from start, the job can be continued by using the `recover` command:
 
-    `python miR_PREFeR.py recover configfile`
+    `python miR_PREFeR.py -l recover configfile`
 
 **NOTE on job recovery:** To recover and continue a job, the intermediate output files in the temporary folder (See the Output section) should not be removed. All files needed to do recovery are in this folder.
 

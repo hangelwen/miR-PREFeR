@@ -45,7 +45,7 @@ If you do not have `git` on your system, simply go to <https://github.com/hangel
 
 **The miR-PREFeR pipeline is still in active development, to be enable to use the newest features from the pipeline, it's better to check the  <https://github.com/hangelwen/miR-PREFeR> page and obtain the newest version.**
 
-## 3. Test the pipeline. ###
+## 3. Test the pipeline. ##
 
 The package contains a small dataset for testing whether the pipeline works after you download it. Please refer to [HOW\_TO\_RUN_EXAMPLE.txt](HOW_TO_RUN_EXAMPLE.txt) file to see more infomation about testing.
 

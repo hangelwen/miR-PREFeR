@@ -2137,14 +2137,15 @@ if __name__ == '__main__':
     outtempfolder = os.path.join(outfolder, dict_option["NAME_PREFIX"]+"_tmp")
     recovername = os.path.join(outtempfolder, dict_option["NAME_PREFIX"]+"_recover")
 
-    if not os.path.exists(outfolder):
-        os.mkdir(dict_option["OUTFOLDER"])
-    if not os.path.exists(outtempfolder):
-        os.mkdir(outtempfolder)
 
     if dict_option['ACTION'] == 'check':
         run_check(dict_option, outtempfolder, recovername)
         exit(0)
+
+    if not os.path.exists(outfolder):
+        os.mkdir(dict_option["OUTFOLDER"])
+    if not os.path.exists(outtempfolder):
+        os.mkdir(outtempfolder)
 
     allgood = check_dependency()
     if not allgood:

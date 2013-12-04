@@ -89,7 +89,7 @@ a2. alignment
 The -v 0 option allows no mismatch in the alignment
 The -m 10 option discards reads that can be mapped to more than 10 positions.
 The -p 8 option uses 8 threads to do the alignment
-The -v 0 and the -m 10 options are recommended to use the values above.
+
 
 #### c). The (optional) gff file  ####
 
@@ -117,9 +117,10 @@ With the configuration file ready, the pipeline can be used to predict miRNA loc
     python miR_PREFeR.py [options] command configfile
 
 Currently, the following options are avalible:
+
 1. **-h**: Show help information.
 2. **-l**: Generate a log file. From the log file you can find the status during the running of the pipeline. **Recommend to always use this option.**
-3. **-k**: After finish the whole pipeline, do not remove the temporary folder that contains the intermediate files. This will save disk space. If it's not specified, you can delete the temporary folder after get the result.
+3. **-k**: After finish the whole pipeline, do not remove the temporary folder that contains the intermediate files. This will save disk space. If it's not specified, you can delete the temporary folder after getting the result.
 
 `command` could be one of `check`, `pipeline`, `prepare`, `candidate`, `fold`, `predict`, and `recover`. (Run `python miR_PREFeR.py -h` to see help on options and commands.)
 

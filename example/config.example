@@ -3,7 +3,7 @@
 
 #miR-PREFeR path, please change to your path to the script folder. 
 #Absolute path perfered.
-PIPELINE_PATH = /home/leijikai/project/microRNA/miR-PREFeR/
+PIPELINE_PATH = /home/leijikai/Dropbox/research/miRNA/miR-PREFeR/
 
 #Genomic sequence file in fasta format. 
 FASTA_FILE =  ./TAIR10.chr1.fa

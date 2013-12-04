@@ -45,7 +45,11 @@ If you do not have `git` on your system, simply go to <https://github.com/hangel
 
 **The miR-PREFeR pipeline is still in active development, to be enable to use the newest features from the pipeline, it's better to check the  <https://github.com/hangelwen/miR-PREFeR> page and obtain the newest version.**
 
-## 3. How to run the pipeline. ##
+## 4. Test the pipeline. ###
+
+The package contains a small dataset for testing whether the pipeline works after you download it. Please refer to [HOW\_TO\_RUN_EXAMPLE.txt](HOW_TO_RUN_EXAMPLE.txt) file to see more infomation about testing.
+
+## 4. How to run the pipeline. ##
 
 ### a. Prepare input data for the pipeline. ###
 
@@ -97,7 +101,7 @@ For a genome that already has known annotations, some regions in the genome can 
 
 ### b. Prepare a configuration file for the pipeline. ###
 
-The miR\_PREFeR.py script takes a configuration file as input. The configuration file lists all the information (such as where are the SAM files, genome fasta file, etc) needed to run the pipeline. An example configuration file (`example/config.example`) with detailed descriptions of each option is in the `example` folder. The options are also explained in the following section.
+The miR\_PREFeR.py script takes a configuration file as input. The configuration file lists all the information (such as where are the SAM files, genome fasta file, etc) needed to run the pipeline. An [example configuration file](example/config.example) with detailed descriptions of each option is in the `example` folder. The options are also explained in the following section.
 
 1. PIPELINE_PATH: The path of the miR-PREFeR pipeline.
 2. FASTA_FILE: The path of the genome sequences in fasta format. Absolute path preferred.

@@ -6,6 +6,9 @@ dataset is for Aradidopsis, chromosome 1. To run the example, first change
 directory to the example folder:
 
     cd example
+Then decompress the exampledata.tar.gz file:
+
+    tar xvf exampledata.tar.gz
 
 Then open the config.example file, change the PIPELINE_PATH to the path where
 you put the miR-PREFeR package folder. For example, if you put miR-PREFeR at

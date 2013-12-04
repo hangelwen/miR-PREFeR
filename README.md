@@ -101,7 +101,7 @@ For a genome that already has known annotations, some regions in the genome can 
 
 ### b. Prepare a configuration file for the pipeline. ###
 
-The miR\_PREFeR.py script takes a configuration file as input. The configuration file lists all the information (such as where are the SAM files, genome fasta file, etc) needed to run the pipeline. An [example configuration file](example/config.example) with detailed descriptions of each option is in the `example` folder. The options are also explained in the following section.
+The miR\_PREFeR.py script takes a configuration file as input. The configuration file lists all the information (such as where are the SAM files, genome fasta file, etc) needed to run the pipeline. An example configuration file with detailed descriptions of each option is in the `example` folder. The options are also explained in the following section.
 
 1. PIPELINE_PATH: The path of the miR-PREFeR pipeline.
 2. FASTA_FILE: The path of the genome sequences in fasta format. Absolute path preferred.
@@ -120,7 +120,7 @@ With the configuration file ready, the pipeline can be used to predict miRNA loc
 
     python miR_PREFeR.py [options] command configfile
 
-Currently, the following options are avalible:
+Currently, the following options are available:
 
 1. **-h**: Show help information.
 2. **-l**: Generate a log file. From the log file you can find the status during the running of the pipeline. **Recommend to always use this option.**

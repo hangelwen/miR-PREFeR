@@ -1,0 +1,58 @@
+================================================================================
+1. Test the pipeline.
+
+The package provides a small example dataset for testing the pipeline. The
+dataset is for Aradidopsis, chromosome 1. To run the example, first change
+directory to the example folder:
+
+    cd example
+
+Then open the config.example file, change the PIPELINE_PATH to the path where
+you put the miR-PREFeR package folder. For example, if you put miR-PREFeR at
+~/tools/miR-PREFeR, then set PIPELINE_PATH as:
+
+    PIPELINE_PATH=~/tools/miR-PREFeR
+
+Save the config.example file. In the example folder, execute command:
+
+    python ../miR_PREFeR.py -l -k pipeline config.example
+
+The -l option generates a log file in the output directory example-result. The
+-k option keeps the temp directory used to store the intermediate files. The
+temp directory is in the example-result directory.
+
+If you have python, samtools, RNALfold installed and in the PATH, you should be
+able to run the test program. It takes about one or two minutes to
+finish. You'll be able to see the result in the example-result folder.
+
+
+
+================================================================================
+2. Test how to do checkpointing.
+
+Before testing this, if you have run the pipeline with the example.config file
+in this folder, please remove the example-result folder first.
+
+First run the pipeline with 'pipeline' command:
+
+    python ../miR_PREFeR.py -l -k pipeline config.example
+
+After running for a while (20 seconds, for example. You should let it run for
+enough time to do at least one checkpoint. A "Done" is shown when a checkpoint
+is applied), kill the process by "Ctrl-C". To check where the pipeline was stopped,
+run:
+
+    python ../miR_PREFeR.py -l check config.example
+
+This will show the checkpoint information.
+
+To restart the pipeline from where it was stopped, run:
+
+    python ../miR_PREFeR.py -l recover config.example
+
+The pipeline will continue to finish the job specified in the config.example
+file.
+
+
+
+================================================================================

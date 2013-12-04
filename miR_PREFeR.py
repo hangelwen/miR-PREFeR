@@ -5,7 +5,6 @@ import Queue
 import cPickle
 import time
 import re
-import imp
 import subprocess
 import os
 import distutils.spawn
@@ -263,7 +262,6 @@ def index_genome(fastaname):
     try:
         subprocess.check_call(command.split())
     except Exception as e:
-        sys.stderr.write(e)
         sys.stderr.write("Error occurred when indexing the genome file\n")
         sys.exit(-1)
 
@@ -292,7 +290,6 @@ def gen_keep_regions_from_gff(gffname, tmpdir, dict_len, minlen):
     try:
         subprocess.check_call(command.split())
     except Exception as e:
-        sys.stderr.write(e)
         sys.stderr.write("Error occurred when sorting the gff file\n")
         sys.exit(-1)
     foutput = open(tempbedname, 'w')
@@ -332,11 +329,10 @@ def gen_keep_regions_from_gff(gffname, tmpdir, dict_len, minlen):
 
 
 def sam2bam(samfile, bamfile):
-    command = "samtools view -bS -o" + bamfile + " " + samfile
+    command = "samtools view -bS -o " + bamfile + " " + samfile
     try:
         subprocess.check_call(command.split())
     except Exception as e:
-        sys.stderr.write(e)
         sys.stderr.write("Error occurred when converting SAM to BAM\n")
         sys.exit(-1)
 
@@ -351,7 +347,6 @@ def combine_bamfiles(headersamfile, outbamfile, *bamfiles):
     try:
         subprocess.check_call(command.split())
     except Exception as e:
-        sys.stderr.write(e)
         sys.stderr.write("Error occurred when combining BAM files\n")
         sys.exit(-1)
     return outbamfile
@@ -375,7 +370,6 @@ def gen_keep_regions_sort_bam(bamfile, bedfile, outbamprefix):
         subprocess.check_call(command2.split())
         subprocess.check_call(command3.split())
     except Exception as e:
-        sys.stderr.write(e)
         sys.stderr.write("Error occurred when filtering regions and sorting the BAM file\n")
         sys.exit(-1)
     return outbamprefix+".sort.bam"
@@ -387,7 +381,6 @@ def sort_index_bam(bamfile, outbamprefix):
         subprocess.check_call(command2.split())
         subprocess.check_call(command3.split())
     except Exception as e:
-        sys.stderr.write(e)
         sys.stderr.write("Error occurred when filtering regions and sorting the BAM file\n")
         sys.exit(-1)
     return outbamprefix+".sort.bam"
@@ -399,7 +392,6 @@ def expand_bamfile(bamfile, maxdepth, outputbamfile, outputsamfile):
     try:
         subprocess.check_call(command.split())
     except Exception as e:
-        sys.stderr.write(e)
         sys.stderr.write("Error occurred when converting BAM to SAM\n")
         sys.exit(-1)
     tempsamfile.close()
@@ -420,7 +412,6 @@ def expand_bamfile(bamfile, maxdepth, outputbamfile, outputsamfile):
     try:
         subprocess.check_call(command.split())
     except Exception as e:
-        sys.stderr.write(e)
         sys.stderr.write("Error occurred when converting SAM to BAM\n")
         sys.exit(-1)
     return outputbamfile, outputsamfile
@@ -431,7 +422,6 @@ def index_bam(bamfile, outindexfile):
     try:
         subprocess.check_call(command.split())
     except Exception as e:
-        sys.stderr.write(e)
         sys.stderr.write("Error occurred when indexing the BAM file\n")
         sys.exit(-1)
     return outindexfile
@@ -445,7 +435,6 @@ def filter_bam_by_flag(bamfile, flag, outbamname, keep=True):
     try:
         subprocess.check_call(command.split())
     except Exception as e:
-        sys.stderr.write(e)
         sys.stderr.write("Error occurred when filtering BAM file using flags.\n")
         sys.exit(-1)
     return outbamname
@@ -467,7 +456,6 @@ def prepare_data(dict_option, outtempfolder, logger):
             if logger:
                 logger.error("Error occurred when indexing the genome file. "+
                              "Command: "+index_command)
-            sys.stderr.write(e)
             sys.stderr.write("Error occurred when indexing the genome file\n")
             sys.exit(-1)
 
@@ -583,7 +571,6 @@ def gen_contig_typeA(expandedbam_plus, expandedbam_minus, dict_option,
         samtools_process.stdout.close()
         output = awk_process.communicate()[0]
     except Exception as e:
-            sys.stderr.write(e)
             sys.stderr.write("Error occurred when generating contigs(typeA).\n")
             sys.exit(-1)
     depthfilename = os.path.join(dict_option["OUTFOLDER"],dict_option["NAME_PREFIX"]+"_tmp", "bam.depth.cut"+str(dict_option["READS_DEPTH_CUTOFF"]))
@@ -645,7 +632,6 @@ def dump_loci_seqs_samtool(dict_loci, fastaname, outputprefix, num_of_proc):
                     outmessage, outerr = samtools_process.communicate()
                     seq = str("".join(outmessage.decode().split("\n")[1:]))
                 except Exception as e:
-                    sys.stderr.write(e)
                     sys.stderr.write("Error occurred when cutting loci sequence.\n")
                     sys.exit(-1)
                 strands = set()
@@ -760,7 +746,6 @@ def dump_loci_seqs_and_alignment(dict_loci, sortedbamname, fastaname, outputseqp
                     outmessage, outerr = samtools_process.communicate()
                     seq = str("".join(outmessage.decode().split("\n")[1:]))
                 except Exception as e:
-                    sys.stderr.write(e)
                     sys.stderr.write("Error occurred when cutting loci sequence.\n")
                     sys.exit(-1)
                 strands = set()
@@ -876,7 +861,6 @@ def dump_loci_seqs_and_alignment_multiprocess(dict_loci, piece_info_list,
                         outmessage, outerr = samtools_process.communicate()
                         seq = str("".join(outmessage.decode().split("\n")[1:]))
                     except Exception as e:
-                        sys.stderr.write(e)
                         sys.stderr.write("Error occurred when cutting loci sequence.\n")
                         sys.exit(-1)
                     strands = set()
@@ -1103,7 +1087,6 @@ def samtools_view_region(sortedbamname, seqid, start, end):
         samtools_process = subprocess.Popen(command.split(),stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         outmessage, outerr = samtools_process.communicate()
     except Exception as e:
-        sys.stderr.write(e)
         sys.stderr.write("Error occurred when viewing a region from bamfile.\n")
         sys.exit(-1)
     alignments = outmessage.split("\n")
@@ -1741,7 +1724,6 @@ def get_mature_stemloop_seq(seqid, mstart, mend, start, end, fastaname):
         outmessage, outerr = samtools_process.communicate()
         stemloop_seq = str("".join(outmessage.decode().split("\n")[1:]))
     except Exception as e:
-        sys.stderr.write(e)
         sys.stderr.write("Error occurred when indexing the genome file\n")
         sys.exit(-1)
     return region1, mature_seq, region2, stemloop_seq
@@ -1831,7 +1813,6 @@ def fold_use_RNALfold(inputfastalist, tempfolder, dict_option, maxspan):
             subprocess.check_call(command.split(), stdin=inputfile, stdout=outputfile)
             outputfile.close()
         except Exception as e:
-            sys.stderr.write(e)
             sys.stderr.write("Error occurred when folding sequences.\n")
             sys.exit(-1)
     outputnames = []
@@ -2134,7 +2115,6 @@ def run_removetmp(outtempfolder):
         write_formatted_string("Temporary folder removed.\n", 30, sys.stdout)
         return 0
     except Exception as e:
-        sys.stderr.write(e)
         sys.stderr.write("Error occurred when removing the tmp folder.\n")
         sys.stderr.write("You can remove the folder by yourself.\n")
         return 1

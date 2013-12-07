@@ -194,6 +194,70 @@ def get_reverse_complement(seq):
     return get_complement(seq)[::-1]
 
 
+def get_read_depth_fromID_as_string(seqid):
+    '''
+    Read id could be in "name-N", "name_N","name-xN", or "name_xN" format.
+    'name' could be any non whitespace chars, but better to only use
+    alphanumeric character, "_", and "-".
+    '''
+
+    pattern=r"^\S+[-_]x?([0-9]+)"
+    m = re.match(pattern, seqid)
+    if m:
+        return  m.groups()[0]
+    else:
+        raise Exception('Read Id format is not right./n# read id could be in "name-N", "name_N","name-xN", or "name_xN" format.\n')
+
+def check_sam_format(samname):
+    '''
+    This function does the following:
+    1. Check the read IDs are in right format (see get_read_depth_fromID_as_string)
+    2. Check whether the SAM header is present. The pipeline requires the SAM
+    file has the SAM header.
+    3. Check the flag column of the SAM file. The pipeline requires the second
+    column (the flag column) of the file is in 10-based integer format. SAMtools
+    can output SAM file which has a Hex or string format flag column (-X and -x
+    options in SAMtools view command).
+
+    This only checks the first 100 alignment lines of the SAM file. If all 100
+    lines are right, then it assumes the file is well-formed.
+    '''
+
+    def check_sam_flag(flag):
+        if re.match(r'^[0-9]+$', flag):
+            return True
+        return False
+
+    pattern=r"^\S+[-_]x?([0-9]+)$"
+
+    has_header = False
+    seqid_right = True
+    flag_right = True
+    counter = 0
+    with open(samname) as f:
+        line = f.readline()
+        if line.startswith("@"):
+            has_header = True
+        for line in f:
+            if line.startswith("@"):
+                continue
+            else:
+                counter += 1
+                if counter==100:
+                    break
+                sp = line.split()
+                m = re.match(pattern, sp[0])
+                if m:  # seqid right
+                    continue
+                else:  # seqid wrong
+                    seqid_right = False
+                if check_sam_flag(sp[1]):  # flag right
+                    continue
+                else:  #
+                    flag_right = False
+    return (has_header, seqid_right, flag_right)
+
+
 def compute_RPKM(transcript_len, reads_in_transcript, reads_total):
     return float(reads_in_transcript)*1000000000/(reads_total * transcript_len)
 
@@ -1107,6 +1171,8 @@ def gen_loci_alignment_info(alignments, seqid, loci):
 
 
     '''
+
+
     # alignments for a position in a loci . The format is:
     # key=strand
     # value=[[length, count, total-count][(length1,count1),(length2, count2),...]]
@@ -1133,7 +1199,9 @@ def gen_loci_alignment_info(alignments, seqid, loci):
             continue
         if startpos < loci[0][0] or startpos >loci[0][1]:
             continue
-        depth = int(sp[0].split("-")[-1])  # read names must be in "name-depth" format
+        #depth = int(sp[0].split("-")[-1])  # read names must be in "name-depth" format
+        # read id could be in "name-N", "name_N","name-xN", or "name_xN" format
+        depth = int(get_read_depth_fromID_as_string(sp[0]))
         strand = "+"
         if int(sp[1]) & 16:  # on minus strand
             strand = "-"
@@ -1815,6 +1883,7 @@ def fold_use_RNALfold(inputfastalist, tempfolder, dict_option, maxspan):
         except Exception as e:
             sys.stderr.write("Error occurred when folding sequences.\n")
             sys.exit(-1)
+
     outputnames = []
     for i in range(len(inputfastalist)):
         outname = os.path.join(tempfolder, dict_option["NAME_PREFIX"]+"_rnalfoldoutput_"+str(i))
@@ -1860,11 +1929,33 @@ def load_recover_file(recovername):
     dict_recover = cPickle.load(recoverfile)
     return dict_recover
 
+def run_check_sam_format(dict_option):
+    write_formatted_string_withtime("Checking SAM file format", 30, sys.stdout)
+    sam_not_right = False
+    for name in dict_option["ALIGNMENT_FILE"]:
+        write_formatted_string("Checking " + name, 30, sys.stdout)
+        ret = check_sam_format(name)
+        if ret[0] and ret[1] and ret[2]:
+            write_formatted_string("*** SAMfile OK.", 30, sys.stdout)
+            continue
+        else:
+            sam_not_right = True
+        if not ret[0]:
+            write_formatted_string("!!! SAMfile does not has header.", 30, sys.stdout)
+        if not ret[1]:
+            write_formatted_string("!!! SAMfile read IDs are not in the right format, please refer to the README.", 30, sys.stdout)
+        if not ret[2]:
+            write_formatted_string("!!! SAMfile flags are not in the right format, please refer to the README.", 30, sys.stdout)
+    if sam_not_right:
+        write_formatted_string("!!! Please make sure the SAM format is in the right format as descripted in the README.", 30, sys.stdout)
+        return False
+    return True
+
 def run_check(dict_option, outtempfolder, recovername):
     write_formatted_string_withtime("Checking RNALfold and samtools", 30, sys.stdout)
     if not check_RNALfold():
-        write_formatted_string("*** RNALfold is required but not installed or not in the PATH.", 30, sys.stdout)
-        write_formatted_string("*** Please refer to the README file.", 30, sys.stdout)
+        write_formatted_string("!!! RNALfold is required but not installed or not in the PATH.", 30, sys.stdout)
+        write_formatted_string("!!! Please refer to the README file.", 30, sys.stdout)
     else:
         RNALfoldversion = get_RNALfold_version()
         if is_bug_RNALfold(RNALfoldversion.strip()):
@@ -1879,6 +1970,25 @@ def run_check(dict_option, outtempfolder, recovername):
         write_formatted_string("!!! Please refer to the README file.", 30, sys.stdout)
     else:
         write_formatted_string("*** SAMtools is ready.\n", 30, sys.stdout)
+
+    write_formatted_string_withtime("Checking SAM file format", 30, sys.stdout)
+    sam_not_right = False
+    for name in dict_option["ALIGNMENT_FILE"]:
+        write_formatted_string("Checking " + name, 30, sys.stdout)
+        ret = check_sam_format(name)
+        if ret[0] and ret[1] and ret[2]:
+            write_formatted_string("!!! SAMfile OK.", 30, sys.stdout)
+            continue
+        else:
+            sam_not_right = True
+        if not ret[0]:
+            write_formatted_string("!!! SAMfile does not has header.", 30, sys.stdout)
+        if not ret[1]:
+            write_formatted_string("!!! SAMfile read IDs are not in the right format, please refer to the README.", 30, sys.stdout)
+        if not ret[2]:
+            write_formatted_string("!!! SAMfile flags are not in the right format, please refer to the README.", 30, sys.stdout)
+    if sam_not_right:
+        write_formatted_string_withtime("!!! Please make sure the SAM format is in the right format as descripted in the README.", 30, sys.stdout)
 
     last_stage = detect_stage_last_finished(recovername)
     if last_stage == "fold":
@@ -1909,7 +2019,6 @@ def check_dependency():
             allgood = False
         else:
             write_formatted_string("*** RNALfold is ready.", 30, sys.stdout)
-
     if not check_samtools():
         write_formatted_string("!!! samtools is required but not installed or not in the PATH.", 30, sys.stdout)
         write_formatted_string("!!! Please refer to the README file.", 30, sys.stdout)
@@ -1967,6 +2076,10 @@ def run_candidate(dict_option, outtempfolder, recovername):
     outputdumpprefix = os.path.join(outtempfolder, dict_option["NAME_PREFIX"]+".alndump")
     loci_dump_name = os.path.join(outtempfolder, dict_option["NAME_PREFIX"]+"_loci_dump.dump")
     dict_len = get_length_from_sam(dict_option["ALIGNMENT_FILE"][0])
+
+    if not dict_len:
+        write_formatted_string_withtime("Can not get the sequence length from the input SAM files. Make sure SAM files have headers.", 30, sys.stdout)
+        exit(-1)
 
     combinedbamname = dict_recover["finished_stages"]["prepare"]["combinedbamname"]
     expandedbamname = dict_recover["finished_stages"]["prepare"]["expandedbamname"]
@@ -2146,9 +2259,9 @@ if __name__ == '__main__':
         os.mkdir(dict_option["OUTFOLDER"])
     if not os.path.exists(outtempfolder):
         os.mkdir(outtempfolder)
-
     allgood = check_dependency()
-    if not allgood:
+    samgood = run_check_sam_format(dict_option)
+    if not allgood or not samgood:
         exit(-1)
 
     logger = None

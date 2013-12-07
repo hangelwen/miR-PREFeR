@@ -1,15 +1,14 @@
 import sys
 import os
 import multiprocessing
-import gc
 
 '''
 Pre-process a list of uncollpased fasta files. Collapse the identical reads and
 rename the reads. The identifier for each read in the output files are:
-SN-A-B. Here N is the order of the input fasta file, A is an number identify the
+SN_rA_xB. Here N is the order of the input fasta file, A is an number identify the
 read, B is the total count of the read. For example, if in the second input
 file, a read occurred 1200 times, then it's description line looks like:
->S2-23-1200. Here '23' is just a number that donates the order of the reads when
+>S2_r23_x1200. Here '23' is just a number that donates the order of the reads when
 processing it, it has no use otherwise.
 
 The script assumes each read sequence occupies ONLY one line in the input file.
@@ -49,7 +48,7 @@ def process_one_file(name, prefix, queue):
                 else:
                     dict_reads[key] = 1
     for cnt, r in enumerate(dict_reads):
-        identifier = ">"+prefix+"-"+str(cnt)+"-"+str(dict_reads[r])
+        identifier = ">"+prefix+"_r"+str(cnt)+"_x"+str(dict_reads[r])
         outf.write(identifier+"\n")
         outf.write(r+"\n")
     outf.close()

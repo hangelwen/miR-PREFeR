@@ -14,6 +14,7 @@ import gc
 import logging
 import shutil
 
+
 dict_failure_reasons = {1: "Structure is not stemloop",
                        2: "Mature-star duplex has too many bugles/interior loops",
                        3: "Mature-star duplex has large bugles/interior loops",
@@ -272,10 +273,41 @@ def check_Bowtie():
 
 def check_samtools():
     ret = distutils.spawn.find_executable("samtools")
-    if ret:
-        return True
+    if ret: #check the depth, faidx, view command exist.
+        command = "samtools view"
+        check_process = subprocess.Popen(command.split(), stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        outmessage, outerr = check_process.communicate()
+        if outerr.find("unrecognized") !=-1:
+            message = "Samtools view command does not exist. Please make sure samtools is correctly installed and the version is > 0.1.15. Refer to the README for more infomation"
+            return False, message
+        command = "samtools depth"
+        check_process = subprocess.Popen(command.split(), stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        outmessage, outerr = check_process.communicate()
+        if outerr.find("unrecognized") !=-1:
+            message = "SAMtools depth command does not exist. Please make sure samtools is correctly installed and the version is > 0.1.15. Refer to the README for more infomation"
+            return False, message
+        command = "samtools faidx"
+        check_process = subprocess.Popen(command.split(), stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        outmessage, outerr = check_process.communicate()
+        if outerr.find("unrecognized") !=-1:
+            message = "SAMtools faidx command does not exist. Please make sure samtools is correctly installed and the version is > 0.1.15. Refer to the README for more infomation"
+            return False, message
+        command = "samtools index"
+        check_process = subprocess.Popen(command.split(), stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        outmessage, outerr = check_process.communicate()
+        if outerr.find("unrecognized") !=-1:
+            message = "SAMtools index command does not exist. Please make sure samtools is correctly installed and the version is > 0.1.15. Refer to the README for more infomation"
+            return False, message
+
+        command = "samtools sort"
+        check_process = subprocess.Popen(command.split(), stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        outmessage, outerr = check_process.communicate()
+        if outerr.find("unrecognized") !=-1:
+            message = "SAMtools sort command does not exist. Please make sure samtools is correctly installed and the version is > 0.1.15. Refer to the README for more infomation"
+            return False, message
+        return True, "SAMtools installed."
     else:
-        return False
+        return False, "SAMtools not installed or not in the PATH."
 
 
 def check_RNALfold():
@@ -1792,7 +1824,7 @@ def get_mature_stemloop_seq(seqid, mstart, mend, start, end, fastaname):
         outmessage, outerr = samtools_process.communicate()
         stemloop_seq = str("".join(outmessage.decode().split("\n")[1:]))
     except Exception as e:
-        sys.stderr.write("Error occurred when indexing the genome file\n")
+        sys.stderr.write("Error occurred when calling samtools in get_mature_stemloop_seq.\n")
         sys.exit(-1)
     return region1, mature_seq, region2, stemloop_seq
 
@@ -1955,19 +1987,20 @@ def run_check(dict_option, outtempfolder, recovername):
     write_formatted_string_withtime("Checking RNALfold and samtools", 30, sys.stdout)
     if not check_RNALfold():
         write_formatted_string("!!! RNALfold is required but not installed or not in the PATH.", 30, sys.stdout)
-        write_formatted_string("!!! Please refer to the README file.", 30, sys.stdout)
+        write_formatted_string("!!! Please refer to the README file for how to install and configuration RNALfold.", 30, sys.stdout)
     else:
         RNALfoldversion = get_RNALfold_version()
         if is_bug_RNALfold(RNALfoldversion.strip()):
             write_formatted_string("!!! The version of RNALfold (2.0.4) has a bug. ", 30, sys.stdout)
-            write_formatted_string("!!! Please use the latest version or the older version 1.8.x", 30, sys.stdout)
-            write_formatted_string("!!! Please refer to the README file.", 30, sys.stdout)
+            write_formatted_string("!!! Please use the latest version of RNALfold", 30, sys.stdout)
+            write_formatted_string("!!! Please refer to the README file for how to install and configurate RNALfold.", 30, sys.stdout)
         else:
             write_formatted_string("*** RNALfold is ready.", 30, sys.stdout)
 
-    if not check_samtools():
-        write_formatted_string("!!! samtools is required but not installed or not in the PATH.", 30, sys.stdout)
-        write_formatted_string("!!! Please refer to the README file.", 30, sys.stdout)
+    samtoolcheck =  check_samtools()
+    if not samtoolcheck[0]:
+        write_formatted_string("!!! "+samtoolcheck[1], 30, sys.stdout)
+        write_formatted_string("!!! Please refer to the README file for how to install and configurate samtools.", 30, sys.stdout)
     else:
         write_formatted_string("*** SAMtools is ready.\n", 30, sys.stdout)
 
@@ -2008,23 +2041,26 @@ def check_dependency():
     allgood = True
     if not check_RNALfold():
         write_formatted_string("!!! RNALfold is required but not installed or not in the PATH.", 30, sys.stdout)
-        write_formatted_string("!!! Please refer to the README file.", 30, sys.stdout)
+        write_formatted_string("!!! Please refer to the README file for how to install and configurate RNALfold.", 30, sys.stdout)
         allgood = False
     else:
         RNALfoldversion = get_RNALfold_version()
         if is_bug_RNALfold(RNALfoldversion):
             write_formatted_string("!!! The version of RNALfold (2.0.4) has a bug. ", 30, sys.stdout)
-            write_formatted_string("!!! Please use the latest version or the older version 1.8", 30, sys.stdout)
-            write_formatted_string("!!! Please refer to the README file.", 30, sys.stdout)
+            write_formatted_string("!!! Please use the latest version of RNALfold", 30, sys.stdout)
+            write_formatted_string("!!! Please refer to the README file for how to install and configurate RNALfold.", 30, sys.stdout)
             allgood = False
         else:
             write_formatted_string("*** RNALfold is ready.", 30, sys.stdout)
-    if not check_samtools():
-        write_formatted_string("!!! samtools is required but not installed or not in the PATH.", 30, sys.stdout)
-        write_formatted_string("!!! Please refer to the README file.", 30, sys.stdout)
-        allgood = False
-    else:
+    samtoolscheck =  check_samtools()
+    if samtoolscheck[0]:
         write_formatted_string("*** SAMtools is ready.\n", 30, sys.stdout)
+    else:
+        #write_formatted_string("!!! samtools is required but not installed/not in the PATH/wrong version.", 30, sys.stdout)
+        #write_formatted_string("!!! Please refer to the README file for how to install and configurate samtools.", 30, sys.stdout)
+        write_formatted_string("!!! "+samtoolscheck[1], 30, sys.stdout)
+        write_formatted_string("!!! Please refer to the README file for how to install and configurate samtools.", 30, sys.stdout)
+        allgood = False
 
     return allgood
 

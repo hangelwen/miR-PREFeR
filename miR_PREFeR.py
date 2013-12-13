@@ -989,10 +989,12 @@ def dump_loci_seqs_and_alignment_multiprocess(dict_loci, piece_info_list,
                     elif len(loci)==3 and idx == 1:  # Right side region
                         extendregiontag = " R "
                     if len(strands) == 1:
+                        cur_strand = "+"
                         if "+" in strands:
                             seqtag = ">"+regionpos+" + "+ loci_pos + extendregiontag + otherinfo+"\n"  # >ExtendRegion strand loci 0/L/R peaks
                             dump_key = [seqid, (extendregion[0][0],extendregion[0][1]), "+"]
                         else:
+                            cur_strand = "-"
                             seqtag = ">"+regionpos+" - "+ loci_pos + extendregiontag + otherinfo+"\n"
                             dump_key = [seqid, (extendregion[0][0],extendregion[0][1]), "-"]
                             seq = get_reverse_complement(seq)
@@ -1003,16 +1005,26 @@ def dump_loci_seqs_and_alignment_multiprocess(dict_loci, piece_info_list,
                                                           extendregion[0][0],
                                                           extendregion[0][1])
                         dict_loci_info = gen_loci_alignment_info(alignments, seqid, extendregion)
-                        matures = gen_possible_matures_loci(dict_loci_info, extendregion)
+                        matures = gen_possible_matures_loci(dict_loci_info, extendregion, cur_strand)
                         cPickle.dump([dump_key, extendregiontag.strip(), dict_loci_info, matures], foutdump, protocol=2)
                         continue
-                    if len(strands) == 2:
-                        seqtag = ">"+regionpos+" + "+ loci_pos + extendregiontag + otherinfo+"\n"
+                    if len(strands) == 2:  # this region has peaks on both strands, generate precursors for each strand
+                        otherinfo_plus = ""
+                        for peak in extendregion[1]:
+                            if peak[2] == "+":
+                                otherinfo_plus = otherinfo_plus + str(peak[0])+","+str(peak[1])+","+str(peak[2])+";"
+                        otherinfo_plus = otherinfo_plus.rstrip(";")
+                        seqtag = ">"+regionpos+" + "+ loci_pos + extendregiontag + otherinfo_plus+"\n"
                         plus_tag.append(seqtag)
                         plus_seq.append(seq)
                         num_seq += 1
+                        otherinfo_minus = ""
+                        for peak in extendregion[1]:
+                            if peak[2] == "-":
+                                otherinfo_minus = otherinfo_minus + str(peak[0])+","+str(peak[1])+","+str(peak[2])+";"
+                        otherinfo_minus = otherinfo_minus.rstrip(";")
+                        seqtag = ">"+regionpos+" - "+ loci_pos + extendregiontag + otherinfo_minus+"\n"
                         seq = get_reverse_complement(seq)
-                        seqtag = ">"+regionpos+" - "+ loci_pos + extendregiontag + otherinfo+"\n"
                         minus_tag.append(seqtag)
                         minus_seq.append(seq)
                         num_seq += 1
@@ -1020,20 +1032,21 @@ def dump_loci_seqs_and_alignment_multiprocess(dict_loci, piece_info_list,
                                                           extendregion[0][0],
                                                           extendregion[0][1])
                         dict_loci_info = gen_loci_alignment_info(alignments, seqid, extendregion)
-                        matures = gen_possible_matures_loci(dict_loci_info, extendregion)
+                        matures_plus = gen_possible_matures_loci(dict_loci_info, extendregion, "+")
                         dump_key = [seqid, (extendregion[0][0],extendregion[0][1]), "+"]
-                        plus_dumpinfo.append([dump_key, extendregiontag.strip(), dict_loci_info, matures])
+                        plus_dumpinfo.append([dump_key, extendregiontag.strip(), dict_loci_info, matures_plus])
+                        matures_minus = gen_possible_matures_loci(dict_loci_info, extendregion, "-")
                         dump_key = [seqid, (extendregion[0][0],extendregion[0][1]), "-"]
-                        minus_dumpinfo.append([dump_key, extendregiontag.strip(), dict_loci_info, matures])
-                if len(plus_tag):
-                    for which, tag in enumerate(plus_tag):
-                        fout.write(tag)
-                        fout.write(plus_seq[which]+"\n")
-                        cPickle.dump(plus_dumpinfo[which], foutdump, protocol=2)
-                    for which, tag in enumerate(minus_tag):
-                        fout.write(minus_tag[which])
-                        fout.write(minus_seq[which]+"\n")
-                        cPickle.dump(minus_dumpinfo[which], foutdump, protocol=2)
+                        minus_dumpinfo.append([dump_key, extendregiontag.strip(), dict_loci_info, matures_minus])
+                        if len(plus_tag):
+                            for which, tag in enumerate(plus_tag):
+                                fout.write(tag)
+                                fout.write(plus_seq[which]+"\n")
+                                cPickle.dump(plus_dumpinfo[which], foutdump, protocol=2)
+                            for which, tag in enumerate(minus_tag):
+                                fout.write(minus_tag[which])
+                                fout.write(minus_seq[which]+"\n")
+                                cPickle.dump(minus_dumpinfo[which], foutdump, protocol=2)
         fout.close()
         foutdump.close()
         queue.put(((outputfastaname, outputalnname), num_loci, num_seq))
@@ -1276,9 +1289,11 @@ def gen_loci_alignment_info(alignments, seqid, loci):
     return dict_loci_info
 
 
-def gen_possible_matures_loci(dict_loci_info, loci):
+def gen_possible_matures_loci(dict_loci_info, loci, strand):
     ret_matures = []
-    for start, end, strand in loci[1]:
+    for start, end, curstrand in loci[1]:
+        if curstrand != strand:
+            continue
         mature_depth = 0
         mature_length = 0
         mature_pos = 0
@@ -1758,7 +1773,6 @@ def filter_next_loci(alndumpname, rnalfoldoutname, minlen=50):
     list_miRNA_loci = []
     alnf = open(alndumpname)
     ss_generator = get_structures_next_extendregion(rnalfoldoutname, minlen)
-
     while True:
         region = None
         which = None

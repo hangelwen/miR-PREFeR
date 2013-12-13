@@ -1901,10 +1901,10 @@ def gen_mirna_fasta_ss_from_result(resultlist, maturename, stemloopname,
         if mirna[-2] == "-":
             matureseq = get_reverse_complement(matureseq)
             stemloopseq = get_reverse_complement(stemloopseq)
-            structure = structure[::-1]
-            structure = structure.replace('(','<')
-            structure = structure.replace(')','(')
-            structure = structure.replace('<',')')
+            #structure = structure[::-1]
+            #structure = structure.replace('(','<')
+            #structure = structure.replace(')','(')
+            #structure = structure.replace('<',')')
             seq_dot = seq_dot[::-1]
         f1.write(matureid+"\n")
         f1.write(matureseq+"\n")
@@ -1967,7 +1967,7 @@ def fold_use_RNALfold(inputfastalist, tempfolder, dict_option, maxspan, chunksiz
                 recoverfile.close()
                 dict_recover_infold["nextpos"] = next_chunk[0]  # the position for next round.
                 dict_recover_infold["finishedchunks"] = dict_recover_infold["finishedchunks"] + 1
-                dict_recover_infold["finishedseq"] = dict_recover_infold["finishedseq"] + next_chunk[2]
+                dict_recover_infold["finishedseq"] = dict_recover_infold["finishedseq"] + next_chunk[2]/2
                 dict_recover_infold["rnafoldoutfiles"].append(rnaoutname)
                 recovername_temp = recovername + ".temp"
                 recoverfile_temp = open(recovername_temp, 'w')

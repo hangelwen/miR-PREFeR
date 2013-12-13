@@ -96,7 +96,8 @@ def parse_configfile(configfile):
         "NAME_PREFIX":"",
         "PIPELINE_PATH":"",
         "ONLY_SEQ":[],
-        "DELETE_IF_SUCCESS":"Y"
+        "DELETE_IF_SUCCESS":"Y",
+        "CHECKPOINT_SIZE":3000  #checkpoint every 3000 sequences
     }
     with open(configfile) as f:
         for line in f:
@@ -130,14 +131,17 @@ def parse_configfile(configfile):
                 if key == "NUM_OF_CORE":
                     cpucount = multiprocessing.cpu_count()
                     cpu_to_use = int(sp[1].strip())
-                    if cpucount < cpu_to_use:
+                    if 2*cpucount < cpu_to_use:
                         sys.stderr.write(
-                            "Warnning: NUM_OF_CORE is larger than CPUS/Cores on" +
-                            " the machine. Use "+str(cpucount)+" instead.\n")
-                        cpu_to_use = cpucount
+                            "Warnning: 2*NUM_OF_CORE is larger than CPUS/Cores on" +
+                            " the machine. Use "+str(2*cpucount)+" instead.\n")
+                        cpu_to_use = 2*cpucount
                     dict_option[key] = cpu_to_use
                     continue
-                if key == "PRECURSOR_LEN" or key == "READS_DEPTH_CUTOFF" or key == 'MAX_GAP':
+                if key == "PRECURSOR_LEN":
+                    dict_option[key] = int(sp[1].strip())
+                    continue
+                if key == "READS_DEPTH_CUTOFF" or key == 'MAX_GAP' or key == 'CHECKPOINT_SIZE':
                     dict_option[key] = int(sp[1].strip())
                     continue
                 if key =="OUTFOLDER" or key == "NAME_PREFIX" or key == "DELETE_IF_SUCCESS":
@@ -150,6 +154,19 @@ def parse_configfile(configfile):
                         sys.exit(-1)
                     dict_option[key] = sp[1].strip()
                     continue
+    allgood = True
+    if dict_option["PRECURSOR_LEN"]<60 or dict_option["PRECURSOR_LEN"]>3000:
+        sys.stderr.write("Error: allowed precursor range: 60-3000\n")
+        allgood = False
+    if dict_option["READS_DEPTH_CUTOFF"] < 2:
+        sys.stderr.write("Error: READS_DEPTH_CUTOFF should >=2.\n")
+        allgood = False
+    if dict_option["CHECKPOINT_SIZE"] < 10:
+        sys.stderr.write("Error: CHECKPOINT_SIZE should >=10.\n")
+        allgood = False
+    if not allgood:
+        exit(-1)
+
     return dict_option
 
 
@@ -1201,9 +1218,7 @@ def gen_loci_alignment_info(alignments, seqid, loci):
     The input 'alignments' are result from samtools_view_region for the loci.
     The input 'loci' is an extended region (A dict_loci[seqid][loci_start] value)
 
-
     '''
-
 
     # alignments for a position in a loci . The format is:
     # key=strand
@@ -1492,6 +1507,7 @@ def pos_local_2_genome(localstart, localend, strand, regionstart, regionend,
     else:
         return (regionend-foldstart-localend+1, regionend-foldstart-localstart+1)
 
+
 def stat_duplex(mature, star):
     dict_bp = {}
     ss = mature + star
@@ -1663,6 +1679,7 @@ def get_maturestar_info(ss, mature, foldstart, foldend, regionstart, regionend,
     #  total number of basepairs
     return genome_star_start, genome_star_end, foldregion_genome[0], foldregion_genome[1], star_ss, prime5, mature_ss, total_dots, total_bps
 
+
 def check_expression(ss, dict_extendregion_info, maturepos_genome, mature_depth, starpos_genome, strand):
     '''
     starpos_genome is the genome coordinate of the star sequence position.
@@ -1828,6 +1845,7 @@ def get_mature_stemloop_seq(seqid, mstart, mend, start, end, fastaname):
         sys.exit(-1)
     return region1, mature_seq, region2, stemloop_seq
 
+
 def gen_gff_from_result(resultlist, gffname):
 
     f = open(gffname, 'w')
@@ -1840,6 +1858,7 @@ def gen_gff_from_result(resultlist, gffname):
         write_gff_line(mirna[0],mirna[3],mirna[4]-1,mirna[-2],maturename,
                        maturename, feature="miRNA",fout=f)
     f.close()
+
 
 def gen_mirna_fasta_ss_from_result(resultlist, maturename, stemloopname,
                                    fastaname, ssname):
@@ -1900,29 +1919,98 @@ def gen_mirna_fasta_ss_from_result(resultlist, maturename, stemloopname,
     f3.close()
 
 
-def fold_use_RNALfold(inputfastalist, tempfolder, dict_option, maxspan):
+def gen_next_chunk(inputname, outputpath, start, num_of_lines):
+    f = open(inputname, 'r')
+    f.seek(start)
+    outname = inputname +".chunk"+str(start)
+    outchunkfile = open(outname,'w')
+    count = 0
+    while count < num_of_lines:
+        line = f.readline()
+        if not line:
+            break
+        outchunkfile.write(line)
+        count += 1
+        if count == num_of_lines:
+            outchunkfile.close()
+            return  f.tell(), outname, count
+        else:
+            continue
+    if count >0 :
+        outchunkfile.close()
+        return  f.tell(), outname, count
+    else:
+        os.unlink(outname)
+        return None
+
+
+def fold_use_RNALfold(inputfastalist, tempfolder, dict_option, maxspan, chunksize):
     '''
     Fold the sequences using RNALfold and write results to outputname file.
     '''
-    inputfastalist.sort()
-    def fold(inputname,outputname):
+
+    def fold(inputname, outputname, tempfolder, recovername, chunksize):
         command = "RNALfold -L " + str(maxspan)
         try:
-            outputfile = open(outputname, 'w')
-            inputfile = open(inputname)
-            subprocess.check_call(command.split(), stdin=inputfile, stdout=outputfile)
-            outputfile.close()
-        except Exception as e:
-            sys.stderr.write("Error occurred when folding sequences.\n")
-            sys.exit(-1)
+            recoverfile = open(recovername, 'r')
+            dict_recover_infold = cPickle.load(recoverfile)
+            recoverfile.close()
+            next_chunk = gen_next_chunk(inputname, tempfolder,  dict_recover_infold["nextpos"], chunksize)
+            while next_chunk:
+                rnaoutname = next_chunk[1] + ".rnafoldout"
+                outputfile = open(rnaoutname, 'w')
+                inputfile = open(next_chunk[1])
+                subprocess.check_call(command.split(), stdin=inputfile, stdout=outputfile)
+                outputfile.close()
+                recoverfile = open(recovername, 'r')
+                dict_recover_infold = cPickle.load(recoverfile)
+                recoverfile.close()
+                dict_recover_infold["nextpos"] = next_chunk[0]  # the position for next round.
+                dict_recover_infold["finishedchunks"] = dict_recover_infold["finishedchunks"] + 1
+                dict_recover_infold["finishedseq"] = dict_recover_infold["finishedseq"] + next_chunk[2]
+                dict_recover_infold["rnafoldoutfiles"].append(rnaoutname)
+                recovername_temp = recovername + ".temp"
+                recoverfile_temp = open(recovername_temp, 'w')
+                cPickle.dump(dict_recover_infold, recoverfile_temp)
+                recoverfile_temp.flush()
+                os.fsync(recoverfile_temp.fileno())
+                recoverfile_temp.close()
+                os.rename(recovername_temp, recovername)  # This is atomic on Unix, not work on Windows
+                write_formatted_string("In fold: " + inputname + ": "+str(dict_recover_infold["finishedseq"]) +" sequences folded. Checkpoint done.", 30, sys.stdout)
+                # remove current chunk
+                os.unlink(next_chunk[1])
+                next_chunk = gen_next_chunk(inputname, tempfolder,  next_chunk[0], chunksize)
+            #all chunk done, combine file
+            outputname_temp = outputname+".temp"
+            fout = open(outputname_temp, 'w')
+            recoverfile = open(recovername, 'r')
+            dict_recover_infold = cPickle.load(recoverfile)
+            recoverfile.close()
+            # cat the rnafold fold result together
+            for name in dict_recover_infold["rnafoldoutfiles"]:
+                with open(name) as f:
+                    for line in f:
+                        fout.write(line)
+            fout.flush()
+            os.fsync(fout.fileno())
+            fout.close()
+            os.rename(outputname_temp, outputname)  # This is atomic on Unix, not work on Windows
+            #remove the rnafold result file
+            #for name in dict_recover_infold["rnafoldoutfiles"]:
+            #   os.unlink(name)
 
+        except subprocess.CalledProcessError:
+            sys.stderr.write("Error occurred when folding sequences (when calling RNALfold).\n")
+            sys.stderr.write("Input file: "+inputname +", current chunk:")
+            sys.exit(-1)
+    inputfastalist.sort()
     outputnames = []
     for i in range(len(inputfastalist)):
         outname = os.path.join(tempfolder, dict_option["NAME_PREFIX"]+"_rnalfoldoutput_"+str(i))
         outputnames.append(outname)
     jobs = []
     for i in range(len(inputfastalist)):
-        p = multiprocessing.Process(target = fold, args=(inputfastalist[i], outputnames[i]))
+        p = multiprocessing.Process(target = fold, args=(inputfastalist[i], outputnames[i], tempfolder, inputfastalist[i]+".recover", chunksize))
         p.start()
         jobs.append(p)
     for job in jobs:
@@ -2169,7 +2257,7 @@ def run_candidate(dict_option, outtempfolder, recovername):
         logger.info("=========================Done (candidate stage)=======================\n\n")
 
 
-def run_fold(dict_option, outtempfolder, recovername):
+def run_fold(dict_option, outtempfolder, recovername, tryrecover):
     logger = None
     if dict_option["LOG"]:
         logger = dict_option["LOGGER"]
@@ -2183,10 +2271,31 @@ def run_fold(dict_option, outtempfolder, recovername):
     if logger:
         logger.info("Folding candidate sequences using RNALfold. "+
                     str(dict_option["NUM_OF_CORE"]) + " parallel processes.")
+
+    for name in sorted(dict_recover["finished_stages"]["candidate"]["fasta"]):
+        dict_recover_fold = load_recover_file(name+".recover")
+        if dict_recover_fold and tryrecover:
+            write_formatted_string_withtime("File "+name +" has  "+str(dict_recover_fold["finishedseq"]) +" sequences folded when stopped last time, start from the next sequence.", 30, sys.stdout)
+        else:
+            dict_recover_fold = {"nextpos":0,
+                                 "finishedchunks":0,
+                                 "finishedseq":0,
+                                 "rnafoldoutfiles":[]
+            }
+            foldrecovername_temp = name+".recover.temp"
+            foldrecovername = name+".recover"
+            foldrecoverfile = open(foldrecovername_temp,'w')
+            cPickle.dump(dict_recover_fold, foldrecoverfile)
+            foldrecoverfile.flush()
+            os.fsync(foldrecoverfile.fileno())
+            foldrecoverfile.close()
+            os.rename(foldrecovername_temp, foldrecovername)
+
     foldnames = fold_use_RNALfold(dict_recover["finished_stages"]["candidate"]["fasta"],
                                   outtempfolder,
                                   dict_option,
-                                  dict_option["PRECURSOR_LEN"])
+                                  dict_option["PRECURSOR_LEN"],
+                                  2*dict_option["CHECKPOINT_SIZE"])  # Do checkpointing every CHECKPOINT_SIZE sequences.
 
     if logger:
         logger.info("Start writing recover infomation to the recovery file")
@@ -2324,7 +2433,7 @@ if __name__ == '__main__':
     if dict_option['ACTION'] == 'fold':
         if logger:
             logger.info("ACTION is 'fold'.")
-        run_fold(dict_option, outtempfolder, recovername)
+        run_fold(dict_option, outtempfolder, recovername, False)
         exit(0)
     if dict_option['ACTION'] == 'predict':
         if logger:
@@ -2340,7 +2449,7 @@ if __name__ == '__main__':
             logger.info("ACTION is 'pipeline'.")
         run_prepare(dict_option, outtempfolder, recovername)
         run_candidate(dict_option, outtempfolder, recovername)
-        run_fold(dict_option, outtempfolder, recovername)
+        run_fold(dict_option, outtempfolder, recovername, False)
         run_predict(dict_option, outtempfolder, recovername)
         if not dict_option["KEEPTMP"]:
             run_removetmp(outtempfolder)
@@ -2356,7 +2465,7 @@ if __name__ == '__main__':
         if last_stage == "prepare":
             write_formatted_string("*** Starting the pipeline from stage 'candidate'.", 30, sys.stdout)
             run_candidate(dict_option, outtempfolder, recovername)
-            run_fold(dict_option, outtempfolder, recovername)
+            run_fold(dict_option, outtempfolder, recovername, False)
             run_predict(dict_option, outtempfolder, recovername)
             if not dict_option["KEEPTMP"]:
                 run_removetmp(outtempfolder)
@@ -2364,7 +2473,7 @@ if __name__ == '__main__':
                     logger.info("Temporary folder removed.")
         elif last_stage == "candidate":
             write_formatted_string("*** Starting the pipeline from stage 'fold'.", 30, sys.stdout)
-            run_fold(dict_option, outtempfolder, recovername)
+            run_fold(dict_option, outtempfolder, recovername, True)
             run_predict(dict_option, outtempfolder, recovername)
             if not dict_option["KEEPTMP"]:
                 run_removetmp(outtempfolder)

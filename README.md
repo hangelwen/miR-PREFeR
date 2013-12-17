@@ -70,13 +70,29 @@ The miR-PREFeR pipeline takes SAM format alignment files. SAM alignment files ca
 
 **Prepare RNAseq fasta files for Bowtie**
 
-Because miR-PREFeR is able to use multiple small RNAseq data as input and utilizes information from multiple RNAseq samples (expression pattern consistency, differential expression, etc) to increase the performance of the miRNA loci prediction. **Thus, It's an requirement that the RNAseq reads data (fasta files that contain the RNAseq reads) be preprocessed by the provided `process-reads-fasta.py` script.** The script takes an list of **uncollapsed fasta files** as input, and renames the reads in the input files, and produces a list of collapsed fasta files. Here `uncollpased fasta` means that identical reads in the fasta file have multiple entries.
+***Prepare RNAseq fasta files from uncollpased fasta files.***
 
-For example, if you have 3 small RNAseq samples in uncollpased fasta format with names `SAMPLE1.fasta`, `SAMPLE2.fasta`, and `SAMPLE3.fasta`, then by executing:
+Because miR-PREFeR is able to use multiple small RNAseq data as input and utilizes information from multiple RNAseq samples (expression pattern consistency, differential expression, etc) to increase the performance of the miRNA loci prediction. **Thus, It's an requirement that the RNAseq reads data (fasta files that contain the RNAseq reads) be preprocessed by the provided `process-reads-fasta.py` script.** The script is under the `scripts` folder. The script takes a file that contains a list of sample/library names and an list of **uncollapsed fasta files** as input, and renames the reads in the input files, and produces a list of collapsed fasta files. Here `uncollpased fasta` means that identical reads in the fasta file have multiple entries.
 
-    python process-reads-fasta.py SAMPLE1.fasta SAMPLE2.fasta SAMPLE3.fasta
+For example, if you have 3 small RNAseq samples in uncollpased fasta format with names `SAMPLE1.fasta`, `SAMPLE2.fasta`, and `SAMPLE3.fasta`, and the samples are from 'root', 'flower', and 'salt', respectively, then first create a file with the following three lines:
 
-Three new files with name `SAMPLE1.fasta.processed`, `SAMPLE2.fasta.processed`, and `SAMPLE3.fasta.processed` are produced. These three files are then aligned to the genome fasta file using Bowtie.
+    root
+    flower
+    salt
+
+If you name the file as `samplename.txt`, then run (assume you are in the directory where you installed miR-PREFeR. Otherwise, using the correct path to the process-reads-fasta.py script.):
+
+    python scripts/process-reads-fasta.py samplename.txt SAMPLE1.fasta SAMPLE2.fasta SAMPLE3.fasta
+
+Three new files with name `SAMPLE1.fasta.processed`, `SAMPLE2.fasta.processed`, and `SAMPLE3.fasta.processed` are produced **in the same folder as the input fasta files**. These three files are then aligned to the genome fasta file using Bowtie.
+
+***Prepare RNAseq fasta files from mirdeep/mirdeep2 format collapsed fasta files.***
+
+If you have fasta files in mirDeep, mirDeep2 format (Reads are already collapsed and the identifiers follow format "Identifer_xN", where 'Identifier' is an arbitrary string without any blank characters. 'N' is the number of occurrence (depth) of the read in the library.), we provide a script `convert-mirdeep2-fasta.py`, which is also under the `scripts` folder, to convert them to the required format for miR-PREFeR:
+
+    python scripts/convert-mirdeep2-fasta.py samplename.txt SAMPLE1.mirdeep.fasta SAMPLE2.mirdeep.fasta SAMPLE3.mirdeep.fasta
+
+Three new files with name `SAMPLE1.mirdeep.fasta.processed`, `SAMPLE2.mirdeep.fasta.processed`, and `SAMPLE3.mirdeep.fasta.processed` are produced **in the same folder as the input fasta files**. These three files are then aligned to the genome fasta file using Bowtie.
 
 **Align the RNA-seq fasta files with Bowtie:**
 

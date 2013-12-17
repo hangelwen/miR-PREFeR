@@ -515,7 +515,7 @@ def expand_bamfile(bamfile, maxdepth, outputbamfile, outputsamfile):
                 outf.write(line)
                 continue
             sp = line.split()
-            depth = int(sp[0].split("-")[-1])
+            depth = int(sp[0].split("_")[-1].lstrip("x"))
             if depth > maxdepth:
                 depth = maxdepth
             for i in xrange(depth):

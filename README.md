@@ -111,6 +111,7 @@ The -v 0 option allows no mismatch in the alignment. The -m 10 option discards r
 **Requirement for the SAM file format:**
 
 The pipeline requires the input SAM alignment files:
+
 a.  The SAM files **MUST have headers**. This is a example header:
 
     @HD     VN:1.0  SO:unsorted

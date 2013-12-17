@@ -12,9 +12,9 @@ Then decompress the exampledata.tar.gz file:
 
 Then open the config.example file, change the PIPELINE_PATH to the path where
 you put the miR-PREFeR package folder. For example, if you put miR-PREFeR at
-~/tools/miR-PREFeR, then set PIPELINE_PATH as:
+/home/username/tools/miR-PREFeR, then set PIPELINE_PATH as:
 
-    PIPELINE_PATH=~/tools/miR-PREFeR
+    PIPELINE_PATH=/home/username/tools/miR-PREFeR
 
 Save the config.example file. In the example folder, execute command:
 
@@ -36,11 +36,16 @@ finish. You'll be able to see the result in the example-result folder.
 Before testing this, if you have run the pipeline with the example.config file
 in this folder, please remove the example-result folder first.
 
-First run the pipeline with 'pipeline' command:
+Then change the 'CHECKPOINT_SIZE' option to a smaller value (30, for
+example). The reason to do this is that by default the pipeline makes a
+checkpoint after finishing folding every 3000 sequences, but the sample data is
+so small that the total number of sequences is much smaller than the default.
+
+Then run the pipeline with 'pipeline' command:
 
     python ../miR_PREFeR.py -l -k pipeline config.example
 
-After running for a while (20 seconds, for example. You should let it run for
+After running for a while (10 seconds, for example. You should let it run for
 enough time to do at least one checkpoint. A "Done" is shown when a checkpoint
 is applied), kill the process by "Ctrl-C". To check where the pipeline was stopped,
 run:

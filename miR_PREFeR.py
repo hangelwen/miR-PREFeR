@@ -1842,11 +1842,13 @@ def gen_miRNA_loci_nopredict(alndumpnames, rnalfoldoutnames, minlen, logger):
     return finalresult
 
 
-def get_mature_stemloop_seq(seqid, mstart, mend, start, end, fastaname):
+def get_mature_stemloop_star_seq(seqid, mstart, mend, start, end, sstart, send, fastaname):
     region1 = seqid+":"+str(mstart)+"-"+str(mend)
     region2 = seqid+":"+str(start)+"-"+str(end)
+    region3 = seqid+":"+str(sstart)+"-"+str(send)
     mature_command = "samtools faidx " + fastaname + " " +region1
     stemloop_command = "samtools faidx " + fastaname + " " +region2
+    star_command = "samtools faidx " + fastaname + " " +region3
     try:
         samtools_process = subprocess.Popen(mature_command.split(), stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         outmessage, outerr = samtools_process.communicate()
@@ -1854,10 +1856,13 @@ def get_mature_stemloop_seq(seqid, mstart, mend, start, end, fastaname):
         samtools_process = subprocess.Popen(stemloop_command.split(), stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         outmessage, outerr = samtools_process.communicate()
         stemloop_seq = str("".join(outmessage.decode().split("\n")[1:]))
+        samtools_process = subprocess.Popen(star_command.split(), stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        outmessage, outerr = samtools_process.communicate()
+        star_seq = str("".join(outmessage.decode().split("\n")[1:]))
     except Exception as e:
-        sys.stderr.write("Error occurred when calling samtools in get_mature_stemloop_seq.\n")
+        sys.stderr.write("Error occurred when calling samtools in get_mature_stemloop_star_seq.\n")
         sys.exit(-1)
-    return region1, mature_seq, region2, stemloop_seq
+    return region1, mature_seq, region2, stemloop_seq, region3, star_seq
 
 
 def gen_gff_from_result(resultlist, gffname):
@@ -1866,9 +1871,9 @@ def gen_gff_from_result(resultlist, gffname):
     resultlist.sort()
     for idx, mirna in enumerate(resultlist):
         maturename = "miRNA_"+ str(idx)
-        mirname = "miRNA-stemloop_"+ str(idx)
+        mirname = "miRNA-precursor_"+ str(idx)
         write_gff_line(mirna[0],mirna[1],mirna[2]-1,mirna[-2],mirname, mirname,
-                       feature="miRNA-stemloop",fout=f)
+                       feature="miRNA-precursor",fout=f)
         write_gff_line(mirna[0],mirna[3],mirna[4]-1,mirna[-2],maturename,
                        maturename, feature="miRNA",fout=f)
     f.close()
@@ -1886,8 +1891,8 @@ def gen_mirna_fasta_ss_from_result(resultlist, maturename, stemloopname,
     f3 = open(ssname, 'w')
     for idx, mirna in enumerate(resultlist):
         maturename = "miRNA_" + str(idx)
-        mirname = "miRNA-stemloop_" + str(idx)
-        seqs = get_mature_stemloop_seq(mirna[0],mirna[3], mirna[4]-1, mirna[1], mirna[2]-1, fastaname)
+        mirname = "miRNA-precursor_" + str(idx)
+        seqs = get_mature_stemloop_star_seq(mirna[0],mirna[3], mirna[4]-1, mirna[1], mirna[2]-1, mirna[5], mirna[6]-1, fastaname)
         matureid = ">" + seqs[0] + " " + mirna[-2]+ " " + mirname
         stemloopid = ">" + seqs[2] + " " + mirna[-2]+ " " + mirname
         matureseq = seqs[1].upper().replace("T", "U")
@@ -2347,14 +2352,14 @@ def run_predict(dict_option, outtempfolder, recovername):
                                       foldnames, 60, logger)
     gffname = os.path.join(dict_option["OUTFOLDER"],dict_option["NAME_PREFIX"]+"_miRNA.gff3")
     maturename = os.path.join(dict_option["OUTFOLDER"],dict_option["NAME_PREFIX"]+"_miRNA.mature.fa")
-    stemloopname = os.path.join(dict_option["OUTFOLDER"],dict_option["NAME_PREFIX"]+"_miRNA.stemloop.fa")
-    ssname = os.path.join(dict_option["OUTFOLDER"],dict_option["NAME_PREFIX"]+"_miRNA.stemloop.ss")
+    stemloopname = os.path.join(dict_option["OUTFOLDER"],dict_option["NAME_PREFIX"]+"_miRNA.precursor.fa")
+    ssname = os.path.join(dict_option["OUTFOLDER"],dict_option["NAME_PREFIX"]+"_miRNA.precursor.ss")
     if logger:
         logger.info("Generating a gff file contains all predictions. GFF file name: " + gffname)
     gen_gff_from_result(result,gffname)
     if logger:
-        logger.info("Generating two fasta files contains predicted mature sequences and stem-loop sequences. Fasta file names: [mature]: " +
-                    maturename + ", [stem-loop]: " + stemloopname)
+        logger.info("Generating two fasta files contains predicted mature sequences and precursor sequences. Fasta file names: [mature]: " +
+                    maturename + ", [precurosor]: " + stemloopname)
     gen_mirna_fasta_ss_from_result(result, maturename, stemloopname, dict_option["FASTA_FILE"], ssname)
     if logger:
         logger.info("Start writing recover infomation to the recovery file")

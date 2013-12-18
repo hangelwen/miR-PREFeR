@@ -12,15 +12,15 @@ Then decompress the exampledata.tar.gz file:
 
 Then open the config.example file, change the PIPELINE_PATH to the path where
 you put the miR-PREFeR package folder. For example, if you put miR-PREFeR at
-/home/username/tools/miR-PREFeR, then set PIPELINE_PATH as:
+/home/username/tools/miR-PREFeR-v0.09, then set PIPELINE_PATH as:
 
-    PIPELINE_PATH=/home/username/tools/miR-PREFeR
+    PIPELINE_PATH=/home/username/tools/miR-PREFeR-v0.09
 
 Save the config.example file. In the example folder, execute command:
 
-    python ../miR_PREFeR.py -l -k pipeline config.example
+    python ../miR_PREFeR.py -L -k pipeline config.example
 
-The -l option generates a log file in the output directory example-result. The
+The -L option generates a log file in the output directory example-result. The
 -k option keeps the temp directory used to store the intermediate files. The
 temp directory is in the example-result directory.
 

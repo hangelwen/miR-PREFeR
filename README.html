@@ -33,20 +33,32 @@ make
     make install</p>
 
 <p>If the user does not have root permission. then the package can be installed to
-user specified locations:</p>
+user specified locations (here I assume you install the program in directory /user/tools/ViennaRNA/):</p>
 
-<pre><code>./configure --prefix="/path/to/install" --without-perl
+<pre><code>./configure --prefix="/user/tools/ViennaRNA/" --without-perl
 make
 make install
 </code></pre>
 
-<p>After finish installing the package, <strong>add the bin directory to the PATH environment variable.</strong> Instructions on how to add a path to the PATH environment variable can be found at <a href="http://www.cyberciti.biz/faq/unix-linux-adding-path/">http://www.cyberciti.biz/faq/unix-linux-adding-path/</a> or just google "<code>add directory to PATH</code>".</p>
+<p>After finish installing the package, <strong>add the /user/tools/ViennaRNA/bin directory to the PATH environment variable.</strong> Instructions on how to add a path to the PATH environment variable can be found at <a href="http://www.cyberciti.biz/faq/unix-linux-adding-path/">http://www.cyberciti.biz/faq/unix-linux-adding-path/</a> or just google "<code>add directory to PATH</code>".</p>
 
-<p><strong>NOTE: Because that RNALfold from the ViennaRNA package version 2.0.4 has a bug (If the input sequence has no valid folding structure, the program produces a segmentation fault), please make sure to use ViennaRNA package version 1.8.x or the newest version.</strong></p>
+<p><strong>NOTE: Because that RNALfold from the ViennaRNA package version 2.0.4 has a bug (If the input sequence has no valid folding structure, the program produces a segmentation fault), please make sure to use the newest version of the ViennaRNA package.</strong></p>
 
 <h3>Samtools</h3>
 
 <p>Samtools can be downloaded from <a href="http://samtools.sourceforge.net/">http://samtools.sourceforge.net/</a>. Please follow the instructions from the package to install it. Please note the version 0.1.15 or later is needed (The pipeline uses the <code>samtools depth</code> command, which was introduced from version 0.1.15).</p>
+
+<h3>For Mac OS users</h3>
+
+<p>Since it maybe difficult for some Mac OS users to successfully compile C/C++ programs, we provide several pre-compiled versions of samtools and RNALfold, which are put in the dependency/Mac/ folder. Mac OS users can first try to use the pre-compiled programs. If they do not work (This is possible), then try to compile from the source code by following the instructions in this section. To test whether a pre-compiled program works on your machine, change directory to the folder that contains the program, and then:</p>
+
+<pre><code>chmod +x RNALfold
+./RNALfold -V
+</code></pre>
+
+<p>Here I used the pre-compiled RNALfold as an example. If you can see usage information from the output, then the program works on your machine. Then add the path of the RNALfold to the PATH environment variable, and RNALfold is correctly configured.</p>
+
+<p>Note that in the dependency/Mac/ folder there are several folders named after specific Mac OS X version. If you can find the same version as your own system, then use pre-compiled programs under that folder. Otherwise, try to use programs which were compiled with lower Mac OS X version number.</p>
 
 <h2>2. Obtain and install the pipeline</h2>
 
@@ -190,7 +202,7 @@ bowtie -a -v 0 -p 8 -m 30 -S bowtie-index/TAIR10  -f SAMPLE3.fasta.processed &gt
 
 <ol>
 <li><strong>-h</strong>: Show help information.</li>
-<li><strong>-l</strong>: Generate a log file. From the log file you can find the status during the running of the pipeline. <strong>Recommend to always use this option.</strong></li>
+<li><strong>-L</strong>: Generate a log file. From the log file you can find the status during the running of the pipeline. <strong>Recommend to always use this option.</strong></li>
 <li><strong>-k</strong>: After finish the whole pipeline, do not remove the temporary folder that contains the intermediate files. This will save disk space. If it's not specified, you can delete the temporary folder after getting the result.</li>
 </ol>
 
@@ -205,7 +217,7 @@ bowtie -a -v 0 -p 8 -m 30 -S bowtie-index/TAIR10  -f SAMPLE3.fasta.processed &gt
 <li><strong>predict:</strong> Predict miRNA loci. This step can ONLY be run if the <code>prepare</code>, <code>candidate</code> and <code>fold</code> steps have been finished on the configfile file.</li>
 <li><p><strong>recover:</strong> Tries its best to recover an unfinished job and continues to run from the unfinished step it was ceased. This is designed to easily continue a job other than re-run the whole pipeline from start. For example, if a job was kill half way (This happens sometime. For example, the job takes too long time and the user killed it. Or, if the job was run on an Cluster and was killed halfway because some resources exceed the max values.) In these cases, one does not need to run the pipeline from start, the job can be continued by using the <code>recover</code> command:</p>
 
-<p><code>python miR_PREFeR.py -l recover configfile</code></p></li>
+<p><code>python miR_PREFeR.py -L recover configfile</code></p></li>
 </ol>
 
 <p><strong>NOTE on job recovery:</strong> To recover and continue a job, the intermediate output files in the temporary folder (See the Output section) should not be removed. All files needed to do recovery are in this folder.</p>

@@ -18,19 +18,30 @@ and (as root):
     make install
 
 If the user does not have root permission. then the package can be installed to
-user specified locations:
+user specified locations (here I assume you install the program in directory /user/tools/ViennaRNA/):
 
-    ./configure --prefix="/path/to/install" --without-perl
+    ./configure --prefix="/user/tools/ViennaRNA/" --without-perl
     make
     make install
 
-After finish installing the package, **add the bin directory to the PATH environment variable.** Instructions on how to add a path to the PATH environment variable can be found at <http://www.cyberciti.biz/faq/unix-linux-adding-path/> or just google "`add directory to PATH`".
+After finish installing the package, **add the /user/tools/ViennaRNA/bin directory to the PATH environment variable.** Instructions on how to add a path to the PATH environment variable can be found at <http://www.cyberciti.biz/faq/unix-linux-adding-path/> or just google "`add directory to PATH`".
 
 
-**NOTE: Because that RNALfold from the ViennaRNA package version 2.0.4 has a bug (If the input sequence has no valid folding structure, the program produces a segmentation fault), please make sure to use ViennaRNA package version 1.8.x or the newest version.**
+**NOTE: Because that RNALfold from the ViennaRNA package version 2.0.4 has a bug (If the input sequence has no valid folding structure, the program produces a segmentation fault), please make sure to use the newest version of the ViennaRNA package.**
 
 ### Samtools ###
 Samtools can be downloaded from <http://samtools.sourceforge.net/>. Please follow the instructions from the package to install it. Please note the version 0.1.15 or later is needed (The pipeline uses the `samtools depth` command, which was introduced from version 0.1.15).
+
+### For Mac OS users ###
+
+Since it maybe difficult for some Mac OS users to successfully compile C/C++ programs, we provide several pre-compiled versions of samtools and RNALfold, which are put in the dependency/Mac/ folder. Mac OS users can first try to use the pre-compiled programs. If they do not work (This is possible), then try to compile from the source code by following the instructions in this section. To test whether a pre-compiled program works on your machine, change directory to the folder that contains the program, and then:
+
+    chmod +x RNALfold
+    ./RNALfold -V
+
+Here I used the pre-compiled RNALfold as an example. If you can see usage information from the output, then the program works on your machine. Then add the path of the RNALfold to the PATH environment variable, and RNALfold is correctly configured.
+
+Note that in the dependency/Mac/ folder there are several folders named after specific Mac OS X version. If you can find the same version as your own system, then use pre-compiled programs under that folder. Otherwise, try to use programs which were compiled with lower Mac OS X version number.
 
 
 ## 2. Obtain and install the pipeline ##
@@ -160,7 +171,7 @@ With the configuration file ready, the pipeline can be used to predict miRNA loc
 Currently, the following options are available:
 
 1. **-h**: Show help information.
-2. **-l**: Generate a log file. From the log file you can find the status during the running of the pipeline. **Recommend to always use this option.**
+2. **-L**: Generate a log file. From the log file you can find the status during the running of the pipeline. **Recommend to always use this option.**
 3. **-k**: After finish the whole pipeline, do not remove the temporary folder that contains the intermediate files. This will save disk space. If it's not specified, you can delete the temporary folder after getting the result.
 
 `command` could be one of `check`, `pipeline`, `prepare`, `candidate`, `fold`, `predict`, and `recover`. (Run `python miR_PREFeR.py -h` to see help on options and commands.)
@@ -173,7 +184,7 @@ Currently, the following options are available:
 6. **predict:** Predict miRNA loci. This step can ONLY be run if the `prepare`, `candidate` and `fold` steps have been finished on the configfile file.
 7. **recover:** Tries its best to recover an unfinished job and continues to run from the unfinished step it was ceased. This is designed to easily continue a job other than re-run the whole pipeline from start. For example, if a job was kill half way (This happens sometime. For example, the job takes too long time and the user killed it. Or, if the job was run on an Cluster and was killed halfway because some resources exceed the max values.) In these cases, one does not need to run the pipeline from start, the job can be continued by using the `recover` command:
 
-    `python miR_PREFeR.py -l recover configfile`
+    `python miR_PREFeR.py -L recover configfile`
 
 **NOTE on job recovery:** To recover and continue a job, the intermediate output files in the temporary folder (See the Output section) should not be removed. All files needed to do recovery are in this folder.
 

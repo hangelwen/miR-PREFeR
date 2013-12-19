@@ -63,7 +63,7 @@ command could be one of the following:
 configfile: configuration file"""
 
     parser = OptionParser(helpstr)
-    parser.add_option("-l", "--log", action="store_true", dest="log",
+    parser.add_option("-L", "--log", action="store_true", dest="log",
                       help="Generate a log file.")
     parser.add_option("-k", "--keep-tmp", action="store_true", dest="keeptmp",
                       help="After finish the whole pipeline, do not remove the temporary folder that contains the intermidate files.")
@@ -214,17 +214,16 @@ def get_reverse_complement(seq):
 
 def get_read_depth_fromID_as_string(seqid):
     '''
-    Read id could be in "name-N", "name_N","name-xN", or "name_xN" format.
-    'name' could be any non whitespace chars, but better to only use
-    alphanumeric character, "_", and "-".
+    Read ID should be in 'samplename_rA_xN' format. Where A is an number
+    identify the read, and N is the depth of the read.
     '''
 
-    pattern=r"^\S+[-_]x?([0-9]+)"
+    pattern=r"^\S+_x([0-9]+)"
     m = re.match(pattern, seqid)
     if m:
         return  m.groups()[0]
     else:
-        raise Exception('Read Id format is not right./n# read id could be in "name-N", "name_N","name-xN", or "name_xN" format.\n')
+        raise Exception('Read Id format is not right. Read id must be in "samplename_rA_xN" format. See readme section "Prepare input data for the pipeline."\n')
 
 def check_sam_format(samname):
     '''
@@ -237,8 +236,9 @@ def check_sam_format(samname):
     can output SAM file which has a Hex or string format flag column (-X and -x
     options in SAMtools view command).
 
-    This only checks the first 100 alignment lines of the SAM file. If all 100
-    lines are right, then it assumes the file is well-formed.
+    This only checks the first 10000 alignment lines of the SAM file. If all
+    10000 lines are right, then it assumes the file is well-formed.
+
     '''
 
     def check_sam_flag(flag):
@@ -246,12 +246,13 @@ def check_sam_format(samname):
             return True
         return False
 
-    pattern=r"^\S+[-_]x?([0-9]+)$"
+    pattern=r"^(\S+)_r[0-9]+_x([0-9]+)$"
 
     has_header = False
     seqid_right = True
     flag_right = True
     counter = 0
+    samplename = ""
     with open(samname) as f:
         line = f.readline()
         if line.startswith("@"):
@@ -260,13 +261,18 @@ def check_sam_format(samname):
             if line.startswith("@"):
                 continue
             else:
+                if not samplename:
+                    samplename = "_".join(line.split()[0].split("_")[0:-2])
                 counter += 1
-                if counter==100:
+                if counter==10000:
                     break
                 sp = line.split()
                 m = re.match(pattern, sp[0])
                 if m:  # seqid right
-                    continue
+                    if m.groups()[0] == samplename:
+                        continue
+                    else:
+                        seqid_right = False
                 else:  # seqid wrong
                     seqid_right = False
                 if check_sam_flag(sp[1]):  # flag right
@@ -1879,6 +1885,313 @@ def gen_gff_from_result(resultlist, gffname):
     f.close()
 
 
+def gen_mirna_info(resultlist, fastaname, combinedsortedbamname, samplenames):
+    '''
+    Each result:
+    Seqid, locus_start, locus_end, mature_start, mature_end, star_start
+    star_end, structure, strand, star_present
+    '''
+
+    dict_mirna_info = {'idlist':[],  # list of all miRNA ids
+                       'info_dict':{},  # dict of miRNA infomations
+                       'samples':samplenames
+    }
+    for idx, mirna in enumerate(resultlist):
+        maturename = "miRNA_" + str(idx)
+        mirname = "miRNA-precursor_" + str(idx)
+        dict_mirna_info['idlist'].append(mirname)
+        seqs = get_mature_stemloop_star_seq(mirna[0],mirna[3], mirna[4]-1, mirna[1], mirna[2]-1, mirna[5], mirna[6]-1, fastaname)
+        matureseq = seqs[1].upper().replace("T", "U")
+        stemloopseq = seqs[3].upper().replace("T", "U")
+        starseq = seqs[5].upper().replace("T", "U")
+        structure = mirna[-3]  # structure is already reversed if on minus
+        strand = mirna[8]
+        maturestart_inseq = mirna[3] - mirna[1]
+        matureend_inseq = mirna[4] - mirna[1]
+        starstart_inseq = mirna[5] - mirna[1]
+        starend_inseq = mirna[6] - mirna[1]
+
+        #if mirna[-2] == "-":
+        #    matureseq = get_reverse_complement(matureseq)
+        #    stemloopseq = get_reverse_complement(stemloopseq)
+        #    starseq = get_reverse_complement(starseq)
+        dict_mirna_info['info_dict'][mirname] = {}
+        dict_mirna_info['info_dict'][mirname]['precursor'] = stemloopseq
+        dict_mirna_info['info_dict'][mirname]['matureseq'] = matureseq
+        dict_mirna_info['info_dict'][mirname]['starseq'] = starseq
+        dict_mirna_info['info_dict'][mirname]['starseq'] = starseq
+        dict_mirna_info['info_dict'][mirname]['strand'] = mirna[8]
+        dict_mirna_info['info_dict'][mirname]['precursor_id'] = mirname
+        dict_mirna_info['info_dict'][mirname]['mature_id'] = maturename
+        dict_mirna_info['info_dict'][mirname]['ss'] = structure
+        dict_mirna_info['info_dict'][mirname]['chr'] = mirna[0]
+        dict_mirna_info['info_dict'][mirname]['locus_start'] = mirna[1]
+        dict_mirna_info['info_dict'][mirname]['locus_end'] = mirna[2]  # [start, end)
+        dict_mirna_info['info_dict'][mirname]['mature_start'] = mirna[3]  # [start, end)
+        dict_mirna_info['info_dict'][mirname]['mature_end'] = mirna[4]  # [start, end)
+        dict_mirna_info['info_dict'][mirname]['star_start'] = mirna[5]  # [start, end)
+        dict_mirna_info['info_dict'][mirname]['star_end'] = mirna[6]  # [start, end)
+        for sample in samplenames:
+            dict_mirna_info['info_dict'][mirname][sample] = {}
+            dict_mirna_info['info_dict'][mirname][sample]['reads_pre'] = 0  # number of reads mapped to the precursor region (on the same strand as the locus)
+            dict_mirna_info['info_dict'][mirname][sample]['reads_mature'] = 0  # number of reads mapped exactly to the mature seq (on the same strand as the locus)
+            dict_mirna_info['info_dict'][mirname][sample]['reads_star'] = 0  # number of reads mapped exactly to the star seq (on the same strand as the locus)
+            dict_mirna_info['info_dict'][mirname][sample]['reads_antisense'] = 0  # number of reads mapped to the antisense of the locus.
+            dict_mirna_info['info_dict'][mirname][sample]['reads_maps'] = {}  # reads starts from each position. key: position, value: a list of (readseq, count)
+        alignments = samtools_view_region(combinedsortedbamname, mirna[0],
+                                          mirna[1], mirna[2]-1)
+        # import pdb; pdb.set_trace();
+        for aln in alignments:
+            sp = aln.split()
+            startpos =0
+            readlen = 0
+            try:  # skip unmapped alignment
+                startpos = int(sp[3])
+                readlen = len(sp[9])
+            except ValueError:
+                continue
+            if startpos < mirna[1] or startpos+readlen > mirna[2]:
+                continue
+            depth = int(get_read_depth_fromID_as_string(sp[0]))
+            read_sample = sp[0].split("_")[0].strip(">")
+            aln_strand = "+"
+            if int(sp[1]) & 16:  # on minus strand
+                aln_strand = "-"
+            if aln_strand != strand:  # antisense strand
+                dict_mirna_info['info_dict'][mirname][read_sample]['reads_antisense'] = dict_mirna_info['info_dict'][mirname][read_sample]['reads_antisense'] + depth
+                continue
+            dict_mirna_info['info_dict'][mirname][read_sample]['reads_pre'] = dict_mirna_info['info_dict'][mirname][read_sample]['reads_pre'] + depth
+            if startpos in dict_mirna_info['info_dict'][mirname][read_sample]['reads_maps']:
+                dict_mirna_info['info_dict'][mirname][read_sample]['reads_maps'][startpos].append((sp[9],depth))
+            else:
+                dict_mirna_info['info_dict'][mirname][read_sample]['reads_maps'][startpos]= [(sp[9],depth)]
+            if (startpos==mirna[3]) and (readlen==len(matureseq)):
+                dict_mirna_info['info_dict'][mirname][read_sample]['reads_mature'] = dict_mirna_info['info_dict'][mirname][read_sample]['reads_mature'] + depth
+            if (startpos==mirna[5]) and (readlen==len(starseq)):
+                dict_mirna_info['info_dict'][mirname][read_sample]['reads_star'] = dict_mirna_info['info_dict'][mirname][read_sample]['reads_star'] + depth
+    return dict_mirna_info
+
+
+
+def gen_miRNA_stat(dict_mirna_info):
+    dict_length_distrubution = {}
+    first_char_distribution = {}
+    total_prediction = len(dict_mirna_info['idlist'])
+    for mirna in dict_mirna_info['info_dict']:
+        mirnalen = len(dict_mirna_info['info_dict'][mirna]['matureseq'])
+        dict_length_distrubution[mirnalen] = dict_length_distrubution.get(mirnalen, 0) + 1
+        first_char_distribution[dict_mirna_info['info_dict'][mirna]['matureseq'][0]] \
+            = first_char_distribution.get(dict_mirna_info['info_dict'][mirna]['matureseq'][0], 0) +1
+    return total_prediction, dict_length_distrubution, first_char_distribution
+
+
+def gen_csv_table(dict_mirna_info, csvname):
+    f = open(csvname, 'w')
+    header1 = "miRNAID, Seqid(chromosome), start position, end position, strand, precursor sequence, secondary structure, mature sequence, star sequence, "
+    header2 = "miRNAID, Seqid(chromosome), start position, end position, strand, precursor sequence, secondary structure, mature sequence, star sequence, "
+    for sample in dict_mirna_info['samples']:
+        header1 = header1 + sample +"," + sample +","+ sample +","+ sample +","
+        header2 = header2 + "reads mapped to precursor, reads mapped to mature, reads mapped to star, reads mapped to antisense region,"
+    f.write(header1+"\n")
+    f.write(header2+"\n")
+    for mirna in dict_mirna_info['idlist']:
+        preseq = dict_mirna_info['info_dict'][mirna]['precursor']
+        matureseq = dict_mirna_info['info_dict'][mirna]['matureseq']
+        starseq = dict_mirna_info['info_dict'][mirna]['starseq']
+        if dict_mirna_info['info_dict'][mirna]['strand']=="-":
+            preseq = get_reverse_complement(preseq)
+            matureseq = get_reverse_complement(matureseq)
+            starseq = get_reverse_complement(starseq)
+        outstr = [dict_mirna_info['info_dict'][mirna]['precursor_id'],
+                  dict_mirna_info['info_dict'][mirna]['chr'],
+                  str(dict_mirna_info['info_dict'][mirna]['locus_start']),
+                  str(dict_mirna_info['info_dict'][mirna]['locus_end']),
+                  dict_mirna_info['info_dict'][mirna]['strand'],
+                  preseq,
+                  dict_mirna_info['info_dict'][mirna]['ss'],
+                  matureseq,
+                  starseq]
+        for sample in dict_mirna_info['samples']:
+            outstr.append(str(dict_mirna_info['info_dict'][mirna][sample]['reads_pre']))
+            outstr.append(str(dict_mirna_info['info_dict'][mirna][sample]['reads_mature']))
+            outstr.append(str(dict_mirna_info['info_dict'][mirna][sample]['reads_star']))
+            outstr.append(str(dict_mirna_info['info_dict'][mirna][sample]['reads_antisense']))
+        f.write(", ".join(outstr)+"\n")
+
+
+def gen_search_miRBase_str(matureseq, taxon):
+    formstr = '''<form name="myform" action="http://www.mirbase.org/cgi-bin/blast.pl" method="POST"> \
+    <div align="center"> \
+    <input type="hidden" size="25" name="sequence" value=" ''' +matureseq + '''"> \
+    <input type="hidden" size="25" name="seqfile" value=""> \
+    <input type="hidden" size="25" name="type" value="mature"> \
+    <input type="hidden" size="25" name="search_method" value="blastn"> \
+    <input type="hidden" size="25" name="evalue" value="10"> \
+    <input type="hidden" size="25" name="maxalign" value="100"> \
+    <input type="hidden" size="25" name="taxon" value=" '''+ taxon + '''"> \
+    <input type="submit" value="Search mature on miRBase ( ''' + taxon + ''' )" onclick="this.form.target='_blank';return true;"> \
+    </div> \
+    </form>'''
+    return formstr
+
+def gen_html_table_file(dict_mirna_info, htmlname):
+    num_of_samples = len(dict_mirna_info['samples'])
+    colors = ['#A9E2F3', '#ACFA58',  '#F5A9BC']
+    f = open(htmlname, 'w')
+
+    total_count, dict_len, dict_first = gen_miRNA_stat(dict_mirna_info)
+    f.write('<h1 > microRNAs predicted by miR-PREFeR </h1>\n')
+    f.write('<div>\n')
+    f.write('<h2 > Total number of prediction:' + str(len(dict_mirna_info['idlist']))+ '  </h2>\n')
+
+    f.write('<h3>Distribution of the lengths of the mature sequences</h3>\n')
+    f.write('<table border="1">\n')
+    f.write("\t<thead>\n")
+    f.write("\t\t<tr>\n")
+    f.write('\t\t<th>Length</th>\n')
+    f.write('\t\t<th>Count</th>\n')
+    f.write("\t\t</tr>\n")
+    f.write("\t</thead>\n")
+
+    f.write("\t<tbody>\n")
+    for k in sorted(dict_len.keys()):
+        f.write('\t\t<tr>\n')
+        f.write('\t\t\t<td>' + str(k) + ' </td>\n')
+        f.write('\t\t\t<td>' + str(dict_len[k]) + ' </td>\n')
+        f.write('\t\t</tr>\n')
+    f.write("\t</tbody>\n")
+    f.write("</table>\n")
+    f.write('</div>\n')
+    f.write('<h3>Distribution of the nucleotide of the first base of the mature sequences</h3>\n')
+    f.write('<table border="1">\n')
+    f.write("\t<thead>\n")
+    f.write("\t\t<tr>\n")
+    f.write('\t\t<th>Nucleotide</th>\n')
+    f.write('\t\t<th>Count</th>\n')
+    f.write("\t\t</tr>\n")
+    f.write("\t</thead>\n")
+
+    f.write("\t<tbody>\n")
+    for k in sorted(dict_first.keys()):
+        f.write('\t\t<tr>\n')
+        f.write('\t\t\t<td>' + str(k) + ' </td>\n')
+        f.write('\t\t\t<td>' + str(dict_first[k]) + ' </td>\n')
+        f.write('\t\t</tr>\n')
+    f.write("\t</tbody>\n")
+    f.write("</table>\n")
+    f.write('</div>')
+
+    f.write('<div>')
+    f.write('<h3>Detailed infomation </h3>\n')
+    f.write('<table border="1">\n')
+
+    f.write('<colgroup>\n')
+    f.write('\t<col span=9 style="background-color:#CECEF6">\n')
+    for i in range(num_of_samples):
+        f.write('\t<col span="4" style="background-color:'+colors[i%len(colors)]+'">')
+    f.write('</colgroup>\n')
+    f.write("\t<thead>\n")
+    f.write("\t\t<tr>\n")
+    col1 = ['miRNA precursor ID', 'Seqid(chromosome)', 'start position', 'end position', 'strand', 'precursor sequence', 'secondary structure','mature sequence', 'star sequence']
+    col2 = []
+    for c in col1:
+        f.write('\t\t\t<th rowspan="2">' + c +  '</th>\n')
+
+    for sample in dict_mirna_info['samples']:
+        f.write('\t\t\t<th colspan="4">'+sample+'</th>\n')
+    f.write("\t\t</tr>\n")
+    f.write("\t\t<tr>\n")
+    for c in col2:
+        f.write('\t\t\t<th>' + c +  '</th>\n')
+    for sample in dict_mirna_info['samples']:
+        f.write('\t\t\t<th> reads mapped to precursor </th>\n')
+        f.write('\t\t\t<th> reads mapped to mature </th>\n')
+        f.write('\t\t\t<th> reads mapped to star </th>\n')
+        f.write('\t\t\t<th> reads mapped to antisense region </th>\n')
+    f.write("\t\t</tr>\n")
+    f.write("\t</thead>\n")
+    f.write("\t<tbody>\n")
+
+    for mirna in dict_mirna_info['idlist']:
+        f.write("\t\t<tr>\n")
+        preseq = dict_mirna_info['info_dict'][mirna]['precursor']
+        matureseq = dict_mirna_info['info_dict'][mirna]['matureseq']
+        starseq = dict_mirna_info['info_dict'][mirna]['starseq']
+        if dict_mirna_info['info_dict'][mirna]['strand']=="-":
+            preseq = get_reverse_complement(preseq)
+            matureseq = get_reverse_complement(matureseq)
+            starseq = get_reverse_complement(starseq)
+        outstr = [dict_mirna_info['info_dict'][mirna]['precursor_id'],
+                  dict_mirna_info['info_dict'][mirna]['chr'],
+                  str(dict_mirna_info['info_dict'][mirna]['locus_start']),
+                  str(dict_mirna_info['info_dict'][mirna]['locus_end']),
+                  dict_mirna_info['info_dict'][mirna]['strand'],
+                  preseq,
+                  dict_mirna_info['info_dict'][mirna]['ss'],
+                  matureseq + gen_search_miRBase_str(matureseq, "Viridiplantae") + gen_search_miRBase_str(matureseq, "ALL"),
+                  starseq]
+        for sample in dict_mirna_info['samples']:
+            outstr.append(str(dict_mirna_info['info_dict'][mirna][sample]['reads_pre']))
+            outstr.append(str(dict_mirna_info['info_dict'][mirna][sample]['reads_mature']))
+            outstr.append(str(dict_mirna_info['info_dict'][mirna][sample]['reads_star']))
+            outstr.append(str(dict_mirna_info['info_dict'][mirna][sample]['reads_antisense']))
+        for s in outstr:
+            f.write('\t\t\t<td nowrap>'+s+'</td>\n')
+        f.write("\t\t</tr>\n")
+    f.write("\t</tbody>\n")
+    f.write("</table>\n")
+    f.write('</div>\n')
+
+
+def gen_map_result(dict_mirna_info, foldername):
+    for mirna in dict_mirna_info['idlist']:
+        #htmlfile = open(mirna+".map.html",'w')
+        txtfile = open(os.path.join(foldername,mirna+".map.txt"),'w')
+        outlines = []
+        idline = ">"+dict_mirna_info['info_dict'][mirna]['precursor_id'] + " " \
+                 + dict_mirna_info['info_dict'][mirna]['chr'] + ":" +          \
+                  str(dict_mirna_info['info_dict'][mirna]['locus_start']) +    \
+                 "-" + str(dict_mirna_info['info_dict'][mirna]['locus_end']) + \
+                 " " + dict_mirna_info['info_dict'][mirna]['strand']
+        outlines.append(idline)
+        preseq = dict_mirna_info['info_dict'][mirna]['precursor']
+        matureseq = dict_mirna_info['info_dict'][mirna]['matureseq']
+        starseq = dict_mirna_info['info_dict'][mirna]['starseq']
+        ss = dict_mirna_info['info_dict'][mirna]['ss']
+        if dict_mirna_info['info_dict'][mirna]['strand']=="-":
+            preseq = get_reverse_complement(preseq)
+            matureseq = get_reverse_complement(matureseq)
+            starseq = get_reverse_complement(starseq)
+
+        for sample in dict_mirna_info['samples']:
+            outlines.append(">> Read mappings for sample: "+sample)
+            outlines.append("5'->3'")
+            outlines.append(preseq+"\ttotal_mapped_reads="+str(dict_mirna_info['info_dict'][mirna][sample]['reads_pre']))
+            outlines.append(ss)
+            for startpos in sorted(dict_mirna_info['info_dict'][mirna][sample]['reads_maps'].keys()):
+                for r in dict_mirna_info['info_dict'][mirna][sample]['reads_maps'][startpos]:
+                    outstr = ""
+                    padchar = '.'
+                    if (startpos==dict_mirna_info['info_dict'][mirna]['mature_start']) and (len(r[0])==len(matureseq)):
+                        padchar = 'm'
+                    elif (startpos==dict_mirna_info['info_dict'][mirna]['star_start']) and (len(r[0])==len(starseq)):
+                        padchar = 's'
+                    prepadlen = startpos - dict_mirna_info['info_dict'][mirna]['locus_start']
+                    for i in range(prepadlen):
+                        outstr = outstr + padchar
+                    outstr = outstr + r[0]
+                    postpadlen = len(preseq) - len(outstr)
+                    for i in range(postpadlen):
+                        outstr = outstr + padchar
+                    if dict_mirna_info['info_dict'][mirna]['strand'] == '-':
+                        outstr = get_reverse_complement(outstr).replace("U", "T")
+                    outstr = outstr + "\tread_depth=" + str(r[1]) + ", read_length="+str(len(r[0]))
+                    outlines.append(outstr)
+        for line in outlines:
+            txtfile.write(line+"\n")
+
+
+
 def gen_mirna_fasta_ss_from_result(resultlist, maturename, stemloopname,
                                    fastaname, ssname):
     '''
@@ -2171,6 +2484,17 @@ def check_dependency():
 
     return allgood
 
+def get_samplename_from_sam(samname):
+    samplename = ""
+    with open(samname) as f:
+        for line in f:
+            if line.startswith("@"):
+                continue
+            else:
+                samplename = "_".join(line.split()[0].split("_")[0:-2])
+                return samplename
+
+
 def run_prepare(dict_option, outtempfolder, recovername):
     logger = None
     if dict_option["LOG"]:
@@ -2178,6 +2502,14 @@ def run_prepare(dict_option, outtempfolder, recovername):
         logger.info("Starting preparing data for the 'candidate' stage.")
     write_formatted_string_withtime("Starting preparing data for the 'candidate' stage.\n", 30, sys.stdout)
     combinedbamname, expandedsamname, expandedbamname, expandedbam_plus, expandedbam_minus = prepare_data(dict_option, outtempfolder, logger)
+    samplenames = []
+    for name in dict_option["ALIGNMENT_FILE"]:
+        samplenames.append(get_samplename_from_sam(name))
+    samplenamefilename = os.path.join(outtempfolder, "samplenames.dump")
+    samplenamefile = open(samplenamefilename, 'w')
+    cPickle.dump(samplenames, samplenamefile)
+    samplenamefile.close()
+
     if logger:
         logger.info("Start writing recover infomation to the recovery file")
     dict_recover["last_stage"] = "prepare"
@@ -2187,12 +2519,14 @@ def run_prepare(dict_option, outtempfolder, recovername):
     dict_recover["finished_stages"]["prepare"]["expandedsamname"] = expandedsamname
     dict_recover["finished_stages"]["prepare"]["expandedbam_plus"] = expandedbam_plus
     dict_recover["finished_stages"]["prepare"]["expandedbam_minus"] = expandedbam_minus
+    dict_recover["finished_stages"]["prepare"]["samplenamefilename"] = samplenamefilename
     dict_recover["files"]["prepare"] = []
     dict_recover["files"]["prepare"].append(combinedbamname)
     dict_recover["files"]["prepare"].append(expandedsamname)
     dict_recover["files"]["prepare"].append(expandedbamname)
     dict_recover["files"]["prepare"].append(expandedbam_plus)
     dict_recover["files"]["prepare"].append(expandedbam_minus)
+    dict_recover["files"]["prepare"].append(samplenamefilename)
     recoverfile = open(recovername,'w')
     cPickle.dump(dict_recover,recoverfile)
     if logger:
@@ -2225,8 +2559,8 @@ def run_candidate(dict_option, outtempfolder, recovername):
         exit(-1)
 
     combinedbamname = dict_recover["finished_stages"]["prepare"]["combinedbamname"]
-    expandedbamname = dict_recover["finished_stages"]["prepare"]["expandedbamname"]
-    expandedsamname = dict_recover["finished_stages"]["prepare"]["expandedsamname"]
+    #expandedbamname = dict_recover["finished_stages"]["prepare"]["expandedbamname"]
+    #expandedsamname = dict_recover["finished_stages"]["prepare"]["expandedsamname"]
     expandedbam_plus = dict_recover["finished_stages"]["prepare"]["expandedbam_plus"]
     expandedbam_minus = dict_recover["finished_stages"]["prepare"]["expandedbam_minus"]
     #if the length of a contig is smaller than min_contig_len, then ignore it
@@ -2347,9 +2681,18 @@ def run_predict(dict_option, outtempfolder, recovername):
     if logger:
         logger.info("Predicting microRNAs. "+
                     str(dict_option["NUM_OF_CORE"]) + " parallel processes.")
+    samplenamefilename = dict_recover["finished_stages"]["prepare"]["samplenamefilename"]
+    samplenames = cPickle.load(open(samplenamefilename))
+
     foldnames = dict_recover["finished_stages"]["fold"]["foldnames"]
     result = gen_miRNA_loci_nopredict(dict_recover["finished_stages"]["candidate"]["infodump"],
                                       foldnames, 60, logger)
+    if len(result)==0:
+        write_formatted_string_withtime("0 miRNA identified. No result files generated.")
+        if logger:
+            logger.info("0 miRNA identified. No result files generated.")
+        sys.exit(0)
+
     gffname = os.path.join(dict_option["OUTFOLDER"],dict_option["NAME_PREFIX"]+"_miRNA.gff3")
     maturename = os.path.join(dict_option["OUTFOLDER"],dict_option["NAME_PREFIX"]+"_miRNA.mature.fa")
     stemloopname = os.path.join(dict_option["OUTFOLDER"],dict_option["NAME_PREFIX"]+"_miRNA.precursor.fa")
@@ -2360,6 +2703,39 @@ def run_predict(dict_option, outtempfolder, recovername):
     if logger:
         logger.info("Generating two fasta files contains predicted mature sequences and precursor sequences. Fasta file names: [mature]: " +
                     maturename + ", [precurosor]: " + stemloopname)
+
+    readmappingfolder = os.path.join(dict_option['OUTFOLDER'],"readmapping")
+    if not os.path.exists(readmappingfolder):
+        os.mkdir(readmappingfolder)
+    statname =  os.path.join(dict_option['OUTFOLDER'],"miRNA.stat.txt")
+    htmlfile =  os.path.join(dict_option['OUTFOLDER'],dict_option['NAME_PREFIX']+"_miRNA.detail.html")
+    csvfile =  os.path.join(dict_option['OUTFOLDER'],dict_option['NAME_PREFIX']+"_miRNA.detail.csv")
+    if logger:
+        logger.info("Generating precursor region read mapping files in folder: "+readmappingfolder)
+    dict_mirna_info = gen_mirna_info(result, dict_option["FASTA_FILE"],
+                                     os.path.join(outtempfolder,
+                                                  "combined.filtered.sort.bam"),
+                                     samplenames)
+    gen_map_result(dict_mirna_info, readmappingfolder)
+    if logger:
+        logger.info("Generating html and csv format table files which contain the details of the predicted miRNAs. ")
+        logger.info("Generating miRNA statistics file: "+statname)
+    gen_csv_table(dict_mirna_info, csvfile)
+    gen_html_table_file(dict_mirna_info, htmlfile)
+    total_prediction, dict_len, dict_first = gen_miRNA_stat(dict_mirna_info)
+    statfile = open(statname, 'w')
+    statfile.write("Total number of predicted miRNAs: "+ str(total_prediction)+'\n')
+    statfile.write("Distribution of the length of the mature miRNAs:\n")
+    for k in sorted(dict_len.keys()):
+        statfile.write(str(k) + ": " +str(dict_len[k]) + '\n')
+    statfile.write("Distribution of the nucleotide of the first base of the mature miRNAs:\n")
+    for k in sorted(dict_first.keys()):
+        statfile.write(str(k) + ": " +str(dict_first[k]) + '\n')
+
+    resultlistname = os.path.join(outtempfolder,dict_option["NAME_PREFIX"]+"_miRNA.info.dump")
+    resultfile = open(resultlistname,'w')
+    cPickle.dump(result,resultfile)
+
     gen_mirna_fasta_ss_from_result(result, maturename, stemloopname, dict_option["FASTA_FILE"], ssname)
     if logger:
         logger.info("Start writing recover infomation to the recovery file")
@@ -2372,11 +2748,12 @@ def run_predict(dict_option, outtempfolder, recovername):
     dict_recover["files"]["predict"].append(gffname)
     dict_recover["files"]["predict"].append(maturename)
     dict_recover["files"]["predict"].append(stemloopname)
+
     recoverfile = open(recovername,'w')
     cPickle.dump(dict_recover,recoverfile)
     if logger:
         logger.info("Recovery file successfully updated.")
-    outstr = "{0} miRNAs identified. Result writes to file {1}".format(len(result), gffname)
+    outstr = "{0} miRNAs identified.".format(len(result))
     write_formatted_string(outstr, 30, sys.stdout)
     write_formatted_string_withtime("Done\n", 30, sys.stdout)
     if logger:

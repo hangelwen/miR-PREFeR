@@ -1,21 +1,21 @@
 # miR-PREFeR: <strong>mi</strong>cro<strong>R</strong>NA <strong>PRE</strong>diction <strong>F</strong>rom small <strong>R</strong>NAseq data #
 
 
-**The miR-PREFeR pipeline is still in active development, to be able to use the newest features from the pipeline, it's best to check the  <https://github.com/hangelwen/miR-PREFeR> page and obtain the newest version. The current version is only tested under Python 2.6.7, Python 2.7.2 and Python 2.7.3 and should work under Python 2.6.* and Python 2.7.\* (Tested platforms: Linux, Mac OS). It does NOT work under Python 3.0 currently. If you find any problem, please contact the author.**
+**The miR-PREFeR pipeline is still under active development. To use the newest features from the pipeline, check the  <https://github.com/hangelwen/miR-PREFeR> page and obtain the newest version. The current version is only tested under Python 2.6.7, Python 2.7.2 and Python 2.7.3 and should work under Python 2.6.* and Python 2.7.\* (Tested platforms: Linux, Mac OS). It does NOT work under Python 3.0 currently. If you find any problem, please contact the author.**
 
 ## 1. Required programs ##
-To run the miR-PREFeR pipeline, the ViennaRNA package(version 1.8.5 or 2.1.x) and samtools(0.1.15 or later. Tested under 0.1.18) should be installed on the system. miR-PREFeR uses samtools commands to manipulate SAM and BAM alignment files, and uses RNALfold from the ViennaRNA package to do RNA secondary structure folding. The miR-PREFeR pipeline takes SAM alignment files as input, so an aligner such as Bowtie is also required (Not required by the pipeline, but needed for preparing the input data).
+To run the miR-PREFeR pipeline, the ViennaRNA package(tested under 1.8.5 or 2.1.2, 2.1.5) and samtools(0.1.15 or later. Tested under 0.1.18, 0.1.19) should be installed on the system. miR-PREFeR uses samtools commands to manipulate SAM and BAM alignment files, and uses RNALfold from the ViennaRNA package to do RNA secondary structure folding. The miR-PREFeR pipeline takes SAM alignment files as input, so an aligner such as Bowtie is also required (Not required by the pipeline, but needed for preparing the input data).
 
 ### ViennaRNA package ###
-The ViennaRNA package can be downloaded from <http://www.tbi.univie.ac.at/~ronny/RNA/index.html.>. The website provides precompiled  packages for some platforms. For these platforms, download the corresponding package and install it according to the platform package management system. If no precompiled package is provided for your platform, you can install it from source code.
-To install the package from source code, simply decompress the source code archive and cd into the folder,
+The ViennaRNA package can be downloaded from <http://www.tbi.univie.ac.at/~ronny/RNA/index.html.>. The website provides precompiled  packages for most popular Linux distributions. For these platforms, download the corresponding package and install it according to the platform package management system. If no precompiled package is provided for your platform, you can install it from source code.
+To install the package from source code, simply decompress the source code (e.g. type "tar xvf *.tar.gz) archive and cd into the folder,
 then:
 
     ./configure
     make
-
-and (as root):
     make install
+
+The above commands only work if the user has the root permission.
 
 If the user does not have root permission. then the package can be installed to
 user specified locations (here I assume you install the program in directory /user/tools/ViennaRNA/):
@@ -26,11 +26,17 @@ user specified locations (here I assume you install the program in directory /us
 
 After finish installing the package, **add the /user/tools/ViennaRNA/bin directory to the PATH environment variable.** Instructions on how to add a path to the PATH environment variable can be found at <http://www.cyberciti.biz/faq/unix-linux-adding-path/> or just google "`add directory to PATH`".
 
-
 **NOTE: Because that RNALfold from the ViennaRNA package version 2.0.4 has a bug (If the input sequence has no valid folding structure, the program produces a segmentation fault), please make sure to use the newest version of the ViennaRNA package.**
 
 ### Samtools ###
-Samtools can be downloaded from <http://samtools.sourceforge.net/>. Please follow the instructions from the package to install it. Please note the version 0.1.15 or later is needed (The pipeline uses the `samtools depth` command, which was introduced from version 0.1.15).
+Samtools can be downloaded from <http://samtools.sourceforge.net/>. Please follow the instructions from the package to install it. Please note the version 0.1.15 or later is needed (The pipeline uses the `samtools depth` command, which was introduced from version 0.1.15). One example set of commands to install samtools are given below. First, suppose you downloaded samtools-0.1.19.tar.bz2 and saved it in a folder with address /Users/xyz/. Then:
+
+    cd /Users/xyz/
+    tar jfx samtools-0.1.19.tar.bz2
+    cd samtools-0.1.19
+    make
+
+If successful, you should see an executable program named "samtools" in the same folder. You need to add the samtools executable to the PATH environment variable.
 
 ### For Mac OS users ###
 
@@ -54,7 +60,7 @@ This makes an directory named 'miR-PREFeR' in the current directory, and clones 
 
 If you do not have `git` on your system, simply go to <https://github.com/hangelwen/miR-PREFeR/releases>, download the zip file or the tar.gz file of the latest version.
 
-**The miR-PREFeR pipeline is still in active development, to be enable to use the newest features from the pipeline, it's better to check the  <https://github.com/hangelwen/miR-PREFeR> page and obtain the newest version.**
+**The miR-PREFeR pipeline is still under active development, to use the newest features from the pipeline, check <https://github.com/hangelwen/miR-PREFeR> and obtain the newest version.**
 
 ## 3. Test the pipeline. ##
 
@@ -71,7 +77,7 @@ The miR-PREFeR pipeline needs the following input:
 3. (Optional) An GFF (<http://www.sanger.ac.uk/resources/software/gff/spec.html>) file which lists regions in the gnome sequences that should be ignored from miRNA analysis.
 
 #### a). Genome fasta file ####
-Fasta format specification can be found at <http://www.ncbi.nlm.nih.gov/BLAST/blastcgihelp.shtml>. In miR-PREFeR, when an identifier of a genomic sequence is needed, the first part that does not contain any white space characters (whitespace, tab, etc) is used. For example, for the following sequence, 'ath-MIR773a' is used as the identifier of the seqeunce. **Thus, please ensure that all the sequences in the FASTA files have different identifiers.**
+Fasta format specification can be found at <http://www.ncbi.nlm.nih.gov/BLAST/blastcgihelp.shtml>. In miR-PREFeR, for the string following ">", only the first word that  is delimited by any white space characters (whitespace, tab, etc) is used. For example, for the following sequence, 'ath-MIR773a' is used as the identifier of the seqeunce. **Thus, please ensure that all the sequences in the FASTA files have different identifiers.**
 
     >ath-MIR773a MI0005103
     AGGAGGCAAUAGCUUGAGCAAAUAAUUGAUUGCAGAAGUCCAUCGACUAAAGCUGUCACCUGUUUGCUUCCAGCUUUUGUCUCCU
@@ -79,11 +85,11 @@ Fasta format specification can be found at <http://www.ncbi.nlm.nih.gov/BLAST/bl
 #### b). SAM alignment files ####
 The miR-PREFeR pipeline takes SAM format alignment files. SAM alignment files can be generated by many aligners. Here we use Bowtie (<http://bowtie-bio.sourceforge.net/index.shtml>) as an example.
 
-**Prepare RNAseq fasta files for Bowtie**
+**Step 1. Prepare RNAseq fasta files for Bowtie**
 
-***Prepare RNAseq fasta files from uncollpased fasta files.***
+***a. Prepare RNAseq fasta files from uncollpased fasta files.***
 
-Because miR-PREFeR is able to use multiple small RNAseq data as input and utilizes information from multiple RNAseq samples (expression pattern consistency, differential expression, etc) to increase the performance of the miRNA loci prediction. **Thus, It's an requirement that the RNAseq reads data (fasta files that contain the RNAseq reads) be preprocessed by the provided `process-reads-fasta.py` script.** The script is under the `scripts` folder. The script takes a file that contains a list of sample/library names and an list of **uncollapsed fasta files** as input, and renames the reads in the input files, and produces a list of collapsed fasta files. Here `uncollpased fasta` means that identical reads in the fasta file have multiple entries.
+Because miR-PREFeR is able to use multiple small RNAseq data as input and utilizes information from multiple RNAseq samples to increase the performance of the miRNA loci prediction. **Thus, It's an requirement that the RNAseq reads data (fasta files that contain the RNAseq reads) be preprocessed by the provided `process-reads-fasta.py` script.** The script is under the `scripts` folder. The script takes a file that contains a list of sample/library names and an list of **uncollapsed fasta files** as input, and renames the reads in the input files, and produces a list of collapsed fasta files. Here `uncollpased fasta` means that identical reads in the fasta file have multiple entries.
 
 For example, if you have 3 small RNAseq samples in uncollpased fasta format with names `SAMPLE1.fasta`, `SAMPLE2.fasta`, and `SAMPLE3.fasta`, and the samples are from 'root', 'flower', and 'salt', respectively, then first create a file with the following three lines:
 
@@ -97,7 +103,35 @@ If you name the file as `samplename.txt`, then run (assume you are in the direct
 
 Three new files with name `SAMPLE1.fasta.processed`, `SAMPLE2.fasta.processed`, and `SAMPLE3.fasta.processed` are produced **in the same folder as the input fasta files**. These three files are then aligned to the genome fasta file using Bowtie.
 
-***Prepare RNAseq fasta files from mirdeep/mirdeep2 format collapsed fasta files.***
+The following is a section of the processed fasta file from the root sample. The identifier of each read contains the sample name as the first part, then a sequential number rx as to identify the read, the last part is xN, where N is the depth (the number of occurrence) of the read. **Note that this is the required format of the identifiers of the reads. The read identifier in the SAM alignment file MUST follow the format. Otherwise, the pipeline stops at the very early stage and prints message complaining the format of the SAM files.**
+
+    >root_r0_x1
+    ACTACTGCAAGGGCTGGCTCAACCCGC
+    >root_r1_x5
+    TGGTTGCTGTCGCTGGTCGCTGGT
+    >root_r2_x1
+    CAAGGACAACAAGTGACGCCG
+    >root_r3_x186
+    ATAACCGTAGTAATTCTAG
+    >root_r4_x1
+    CCCATATTTTCTCTGAGCCTT
+    >root_r5_x1
+    ATACGGTTCGTTCTGG
+    >root_r6_x31
+    AACTGCGAATGGCTCATTAAAT
+    >root_r7_x1
+    AAAGGTCGACGCGGGCTCTGCCCG
+    >root_r8_x1
+    GATCCGGTGAAGTGTTCGGATC
+    >root_r9_x1
+    GGTAGAGATCGGAGG
+    >root_r10_x24
+    GTGGTTGTAGTATAGCGGTTAG
+    >root_r11_x2
+    TTTGAACGCAAGTTGCGCCCCAA
+
+
+***b. Prepare RNAseq fasta files from mirdeep/mirdeep2 format collapsed fasta files.***
 
 If you have fasta files in mirDeep, mirDeep2 format (Reads are already collapsed and the identifiers follow format "Identifer_xN", where 'Identifier' is an arbitrary string without any blank characters. 'N' is the number of occurrence (depth) of the read in the library.), we provide a script `convert-mirdeep2-fasta.py`, which is also under the `scripts` folder, to convert them to the required format for miR-PREFeR:
 
@@ -105,19 +139,19 @@ If you have fasta files in mirDeep, mirDeep2 format (Reads are already collapsed
 
 Three new files with name `SAMPLE1.mirdeep.fasta.processed`, `SAMPLE2.mirdeep.fasta.processed`, and `SAMPLE3.mirdeep.fasta.processed` are produced **in the same folder as the input fasta files**. These three files are then aligned to the genome fasta file using Bowtie.
 
-**Align the RNA-seq fasta files with Bowtie:**
+**Step 2. Align the RNA-seq fasta files with Bowtie:**
 
 a1. indexing the genome sequences:
 
     bowtie-build -q -f TAIR10.fas bowtie-index/TAIR10
 
-a2. Alignment. Here are example bowtie commands for the same files processed in the previous step:
+a2. conduct the alignment. Here are example bowtie commands for the same files processed in the previous step:
 
     bowtie -a -v 0 -p 8 -m 30 -S bowtie-index/TAIR10  -f SAMPLE1.fasta.processed > SAMPLE1.sam 2> SMAPLE1.log
     bowtie -a -v 0 -p 8 -m 30 -S bowtie-index/TAIR10  -f SAMPLE2.fasta.processed > SAMPLE2.sam 2> SMAPLE2.log
     bowtie -a -v 0 -p 8 -m 30 -S bowtie-index/TAIR10  -f SAMPLE3.fasta.processed > SAMPLE3.sam 2> SMAPLE3.log
 
-The -v 0 option allows no mismatch in the alignment. The -m 10 option discards reads that can be mapped to more than 30 positions. The -p 8 option uses 8 threads to do the alignment.
+The -v 0 option allows no mismatch in the alignment. The -m 10 option discards reads that can be mapped to more than 30 positions. The -p 8 option uses 8 threads to do the alignment. More options of the parameters can be found at <http://bowtie-bio.sourceforge.net/index.shtml>.
 
 **Requirement for the SAM file format:**
 
@@ -133,22 +167,22 @@ a.  The SAM files **MUST have headers**. This is a example header:
     @SQ     SN:Chr5 LN:26975502
     @PG     ID:Bowtie       VN:0.12.8       CL:"bowtie -a -v 1 -p 10 -S bowtie-index/TAIR10 -f ../SAMPLE1.fasta.processed"
 
-You can use "`samtools view -H yoursamfile`" to check whether your SAM file has the header section.
+You can use "`samtools view -H yoursamfile`" to check whether your SAM file has the header section. Bowtie produces headers for SAM format alignment files by default.
 
 b.  The flag column (the second column of the alignment section) of the SAM file **MUST be in a integer.**. The flag generated by Bowtie/or generated by using "`samtools view `" command, by default, is an integer. Samtools provides options to output SAMfiles with Hex (-x option) or string (-X option) format flags. If your SAM file uses these two types of flags, you either need to generate your SAM file again, or convert it to the required format.
 
-c.  The read identifier (the first column of the alignment section) must be in format "Identifer_xN", where 'Identifier' is an arbitrary string without any blank characters. 'N' is the number of occurrence (depth) of the read in the library. This follows the format for miRDeep, miRDeep2, etc. The `process-reads-fasta.py` script automatically renames reads to follow the format, so it's best to use the script to process your reads fasta files before you do alignment.
+c.  The read identifier (the first column of the alignment section) must be in the required format as described in the fasta file preparation section. The `process-reads-fasta.py` and `convert-mirdeep2-fasta.py` scripts can help you generate fasta files of the right format.
 
 The miR-PREFeR pipeline checks the SAM format and if the format is not correct, it prints messages about which format problems it encountered and stops analysis.
 
 
-#### c). The (optional) gff file  ####
+#### c). The (optional) genome annotation file in gff3 format ####
 
-For a genome that already has known annotations, some regions in the genome can be ignored when doing the miRNA analysis. For example, many species have protein coding sequence (CDS) annotations, so there is no need to do run miR-PREFeR on those regions. These regions should be listed in a GFF file (<http://www.sanger.ac.uk/resources/software/gff/spec.html>). Note that for the gff file, you should only contain CDS regions, not introns because miRNAs could be in introns.
+For a genome with known annotations, some regions in the genome can be excluded when doing the miRNA analysis. For example, many species have protein coding sequence (CDS) annotations, so there is no need to do run miR-PREFeR on those regions. These regions should be listed in a GFF file (<http://www.sanger.ac.uk/resources/software/gff/spec.html>). Note that for the gff file, you should only contain CDS regions, not introns because miRNAs could be in introns.
 
 ### b. Prepare a configuration file for the pipeline. ###
 
-The miR\_PREFeR.py script takes a configuration file as input. The configuration file lists all the information (such as where are the SAM files, genome fasta file, etc) needed to run the pipeline. An example configuration file with detailed descriptions of each option is in the `example` folder. The options are also explained in the following section.
+The miR\_PREFeR.py script takes a configuration file as input. The configuration file lists all the information (such as the location of  the SAM files, genome fasta file, etc) needed to run the pipeline. An example configuration file with detailed descriptions of each option is in the example data. The options are also explained in the following section.
 
 1. PIPELINE_PATH: The path of the miR-PREFeR pipeline.
 2. FASTA_FILE: The path of the genome sequences in fasta format. Absolute path preferred.
@@ -164,7 +198,7 @@ The miR\_PREFeR.py script takes a configuration file as input. The configuration
 
 ### c. Run the pipeline. ###
 
-With the configuration file ready, the pipeline can be used to predict miRNA loci. The miR-PREFeR pipeline can be run as following:
+With the configuration file ready, the pipeline can be used to predict miRNAs. The miR-PREFeR pipeline can be run as following:
 
     python miR_PREFeR.py [options] command configfile
 
@@ -182,7 +216,7 @@ Currently, the following options are available:
 4. **candidate:**  Identify possible candidate regions. This step can ONLY be run if the `prepare` step has been finished on the configfile file.
 5. **fold:** Fold the candidate regions. This step can ONLY be run if the `prepare` and `candidate` steps have been finished on the configfile file.
 6. **predict:** Predict miRNA loci. This step can ONLY be run if the `prepare`, `candidate` and `fold` steps have been finished on the configfile file.
-7. **recover:** Tries its best to recover an unfinished job and continues to run from the unfinished step it was ceased. This is designed to easily continue a job other than re-run the whole pipeline from start. For example, if a job was kill half way (This happens sometime. For example, the job takes too long time and the user killed it. Or, if the job was run on an Cluster and was killed halfway because some resources exceed the max values.) In these cases, one does not need to run the pipeline from start, the job can be continued by using the `recover` command:
+7. **recover:** Tries its best to recover an unfinished job and continues to run from the unfinished step it was ceased. This is designed to easily continue a job other than re-run the whole pipeline from start. For example, if a job was kill half way (This happens sometime. For example, the job takes too long time and the user killed it. Or, if the job was run on an cluster and was killed halfway because some resources exceed the max values.) In these cases, one does not need to run the pipeline from start, the job can be continued by using the `recover` command:
 
     `python miR_PREFeR.py -L recover configfile`
 

@@ -2086,19 +2086,21 @@ def gen_html_table_file(dict_mirna_info, htmlname):
     f.write('<table border="1">\n')
 
     f.write('<colgroup>\n')
-    f.write('\t<col span=9 style="background-color:#CECEF6">\n')
+    f.write('\t<col span=8 style="background-color:#CECEF6">\n')
     for i in range(num_of_samples):
         f.write('\t<col span="4" style="background-color:'+colors[i%len(colors)]+'">')
     f.write('</colgroup>\n')
     f.write("\t<thead>\n")
     f.write("\t\t<tr>\n")
-    col1 = ['miRNA precursor ID', 'Seqid(chromosome)', 'start position', 'end position', 'strand', 'precursor sequence', 'secondary structure','mature sequence', 'star sequence']
+    col1 = ['miRNA precursor ID', 'Chromosome', 'start position', 'end position', 'strand', 'precursor sequence and secondary structure','mature sequence', 'star sequence']
     col2 = []
     for c in col1:
         f.write('\t\t\t<th rowspan="2">' + c +  '</th>\n')
 
     for sample in dict_mirna_info['samples']:
         f.write('\t\t\t<th colspan="4">'+sample+'</th>\n')
+    f.write('\t\t\t<th colspan="2">read mappings</th>\n')
+
     f.write("\t\t</tr>\n")
     f.write("\t\t<tr>\n")
     for c in col2:
@@ -2125,10 +2127,11 @@ def gen_html_table_file(dict_mirna_info, htmlname):
                   dict_mirna_info['info_dict'][mirna]['chr'],
                   str(dict_mirna_info['info_dict'][mirna]['locus_start']),
                   str(dict_mirna_info['info_dict'][mirna]['locus_end']),
-                  dict_mirna_info['info_dict'][mirna]['strand'],
-                  preseq,
-                  dict_mirna_info['info_dict'][mirna]['ss'],
-                  matureseq + gen_search_miRBase_str(matureseq, "Viridiplantae") + gen_search_miRBase_str(matureseq, "ALL"),
+                  dict_mirna_info['info_dict'][mirna]['strand']]
+        for s in outstr:
+            f.write('\t\t\t<td nowrap>'+s+'</td>\n')
+        f.write('\t\t\t<td nowrap> <code>'+preseq+'<BR>'+dict_mirna_info['info_dict'][mirna]['ss']+ ' </code></td>')
+        outstr = [ matureseq + gen_search_miRBase_str(matureseq, "Viridiplantae") + gen_search_miRBase_str(matureseq, "ALL"),
                   starseq]
         for sample in dict_mirna_info['samples']:
             outstr.append(str(dict_mirna_info['info_dict'][mirna][sample]['reads_pre']))
@@ -2137,7 +2140,9 @@ def gen_html_table_file(dict_mirna_info, htmlname):
             outstr.append(str(dict_mirna_info['info_dict'][mirna][sample]['reads_antisense']))
         for s in outstr:
             f.write('\t\t\t<td nowrap>'+s+'</td>\n')
+        f.write('\t\t\t<td><a href="readmapping/'+mirna+'.map.txt"'+ ' target="_blank">Click to see detailed mapping.</a></td>')
         f.write("\t\t</tr>\n")
+
     f.write("\t</tbody>\n")
     f.write("</table>\n")
     f.write('</div>\n')
@@ -2185,7 +2190,11 @@ def gen_map_result(dict_mirna_info, foldername):
                         outstr = outstr + padchar
                     if dict_mirna_info['info_dict'][mirna]['strand'] == '-':
                         outstr = get_reverse_complement(outstr).replace("U", "T")
-                    outstr = outstr + "\tread_depth=" + str(r[1]) + ", read_length="+str(len(r[0]))
+                    outstr = outstr + "\tdepth=" + str(r[1]) + ", length="+str(len(r[0]))
+                    if padchar=='m':
+                        outstr = outstr + " [mature]"
+                    if padchar=='s':
+                        outstr = outstr + " [star]"
                     outlines.append(outstr)
         for line in outlines:
             txtfile.write(line+"\n")

@@ -56,8 +56,8 @@ def process_one_file(name, prefix, queue):
         for line in f:
             if line.startswith(">"):
                 sp = line.split("x")
-                seqid = ">"+prefix+"_r"+str(count)+"_x"+sp[-1]
-                outf.write(seqid)
+                seqid = ">"+prefix+"_r"+str(count)+"_x"+sp[-1].strip()
+                outf.write(seqid+'\n')
                 count += 1
             else:
                 outf.write(line)

@@ -1,0 +1,32 @@
+This FAQ contains some general or specific questions about executing miR-PREFeR in command-line mode. You need to type all the commands in a terminal (e.g. under UNIX, Linux, MAC etc.).
+
+Q: How do I know whether I can run python scripts on my machine?
+A: Type "python --version". You should see the version number.
+
+Q: How do I know whether the Vienna package has been correctly installed on my machine?
+A: Go to the folder where you installed the package, e.g. ViennaRNA-2.1.2. Go the sub-folder Progs by typing "cd Progs". Execute command "./RNALfold -h". A successfully installed RNALfold program will output options/parameters and their explanations. 
+
+Q: How do I know I have added the ViennaRNA package to the PATH environment variable correctly?
+A: If the executables of ViennaRNA package have been correctly added to PATH, you can execute RNALfold program from any directory. For example, even if you are not in "..../ViennaRNA-2.1.2/Progs", you can still type "RNALfold -h" and get the helpful information for this program. On the other hand, if you can execute RNALfold in ".../ViennaRNA-2.2.2/Progs" but get the otuput similar to "RNALfold: command not found" in other directories, you did not add the ViennaRNA package to PATH correctly.
+
+Q: How do I add the executables of the ViennaRNA package to PATH?
+A: A comprehensive introduction to this topic for all types of shell can be found at http://www.cyberciti.biz/faq/unix-linux-adding-path/ or just google "add directory to PATH". Suppose you use bash, you can use the following commands to check and modify PATH.
+    To check the contents of PATH, type "echo $PATH". 
+    To add a directory such as "/Users/xyz/ViennaRNA-2.2.2/Progs" to PATH, use "export PATH="$PATH:/Users/xyz/ViennaRNA-2.2.2/Progs".
+    The above command will only work for the current terminal. To make the change to PATH permanent, you need to modify "~/.bash_profile". One possible command to do so is to type: echo 'export PATH=$PATH:/Users/xyz/ViennaRNA-2.2.2/Progs'  >> ~/.bash_profile". You can also use editors such as emacs to directly change ~/.bash_profile. 
+    Finally, use "echo $PATH" again to check whether the new directly has been added to PATH correctly. 
+
+Q: How to decompress *.tar.gz (ViennaRNA package) and *.tar.bz2 (samtools)?
+A: Type "tar xvf ViennaRNA-2.2.2.tar.gz" and "tar jfx samtools-x.x.x.tar.bz2", respectively.
+
+Q: How to install samtools? 
+A: After decompressing samtools using "tar jfx" (if in tar.bz2 format), execute "make". 
+
+Q: How do I know that I have intalled samtools correctly?
+A: You should see an executable file named "samtools". Type "samtools". You will see version number and the usage information. Because miR-PREFeR uses "samtools depth", "samtools view", and "samtools faidx" commands, you need to check whether these comamnds exist.
+
+Q: I cannot install ViennaRNA package.
+A: If your OS is relatively old, consider to use an earlier version of ViennaRNA package. If your OS is new, consider to install a newer version. 
+
+
+ 

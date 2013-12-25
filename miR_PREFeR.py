@@ -80,7 +80,7 @@ configfile: configuration file"""
     return dict_option
 
 def parse_configfile(configfile):
-    if not os.path.exists(configfile):
+    if not os.path.exists(os.path.expanduser(configfile)):
         sys.stderr.write("Configuration file " + configfile + " does not exist!!\n")
         sys.exit(-1)
     dict_option = {
@@ -111,22 +111,22 @@ def parse_configfile(configfile):
                 if key == "ALIGNMENT_FILE":
                     names = sp[1].split(",")
                     for name in names:
-                        if not os.path.exists(name.strip()):
+                        if not os.path.exists(os.path.expanduser(name.strip())):
                             sys.stderr.write("File " + name.strip() +
                                              " does not exist!!\n")
                             sys.exit(-1)
-                        dict_option[key].append(name.strip())
+                        dict_option[key].append(os.path.expanduser(name.strip()))
                     continue
                 if key == "ONLY_SEQ":
                     names = sp[1].split(",")
                     for name in names:
                         dict_option[key].append(name.strip())
                 if key == "GFF_FILE" or key == "FASTA_FILE":
-                    if not os.path.exists(sp[1].strip()):
+                    if not os.path.exists(os.path.expanduser(sp[1].strip())):
                         sys.stderr.write("File " + sp[1].strip() +
                                           " does not exist!!\n")
                         sys.exit(-1)
-                    dict_option[key] = sp[1].strip()
+                    dict_option[key] = os.path.expanduser(sp[1].strip())
                     continue
                 if key == "NUM_OF_CORE":
                     cpucount = multiprocessing.cpu_count()
@@ -148,11 +148,11 @@ def parse_configfile(configfile):
                     dict_option[key] = sp[1].strip()
                     continue
                 if key == "PIPELINE_PATH":
-                    if not os.path.exists(sp[1].strip()):
+                    if not os.path.exists(os.path.expanduser(sp[1].strip())):
                         sys.stderr.write("miR-PREFeR path " + sp[1].strip() +
                         " does not exist!!\n")
                         sys.exit(-1)
-                    dict_option[key] = sp[1].strip()
+                    dict_option[key] = os.path.expanduser(sp[1].strip())
                     continue
     allgood = True
     if dict_option["PRECURSOR_LEN"]<60 or dict_option["PRECURSOR_LEN"]>3000:
@@ -1561,19 +1561,31 @@ def stat_duplex(mature, star):
                 bulges.append((maturebulgesize, starbulgesize))
     return loops, bulges
 
+
 def pass_stat_duplex(loops, bulges):
     total = len(loops) + len(bulges)
     if total > 5:
         return False
     num_loop_bigger_than_three = 0
     num_bulge_bigger_than_three = 0
+    totalloopsize = 0
+    max_bulge = 0
     for size in loops:
+        totalloopsize += size
         if size >= 4:
             num_loop_bigger_than_three += 1
+
     for size1, size2 in bulges:
+        max_bulge = max(max_bulge, size1, size2)
         if size1>=4 or size2>=4:
             num_bulge_bigger_than_three += 1
-    if num_loop_bigger_than_three >1 or num_bulge_bigger_than_three >0:
+    #if num_loop_bigger_than_three >1 or num_bulge_bigger_than_three >0:
+    #    return False
+    if max_bulge >2:  # maxmium bulge size is bigger than 2
+        return False
+    if totalloopsize >5:  # total loop size bigger than 5. >=5???
+        return False
+    if len(bulges) > 2:  #number of bulges is bigger than 2
         return False
     return True
 
@@ -2697,7 +2709,7 @@ def run_predict(dict_option, outtempfolder, recovername):
     result = gen_miRNA_loci_nopredict(dict_recover["finished_stages"]["candidate"]["infodump"],
                                       foldnames, 60, logger)
     if len(result)==0:
-        write_formatted_string_withtime("0 miRNA identified. No result files generated.")
+        write_formatted_string_withtime("0 miRNA identified. No result files generated.", 30, sys.stdout)
         if logger:
             logger.info("0 miRNA identified. No result files generated.")
         sys.exit(0)

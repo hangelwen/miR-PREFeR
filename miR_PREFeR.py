@@ -2707,7 +2707,7 @@ def run_predict(dict_option, outtempfolder, recovername):
 
     foldnames = dict_recover["finished_stages"]["fold"]["foldnames"]
     result = gen_miRNA_loci_nopredict(dict_recover["finished_stages"]["candidate"]["infodump"],
-                                      foldnames, 60, logger)
+                                      foldnames, 55, logger)
     if len(result)==0:
         write_formatted_string_withtime("0 miRNA identified. No result files generated.", 30, sys.stdout)
         if logger:

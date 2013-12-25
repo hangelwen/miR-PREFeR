@@ -1721,11 +1721,13 @@ def check_expression(ss, dict_extendregion_info, maturepos_genome, mature_depth,
     The return value is the depth of the star sequence.
     '''
     starlen = starpos_genome[1] - starpos_genome[0]
+    maturelen = maturepos_genome[1] - maturepos_genome[0]
     total_depth = 0
     star_depth = 0
+    mature_isoform_depth = 0
     for pos in dict_extendregion_info[0]:
         for s in dict_extendregion_info[0][pos]:
-            total_depth += dict_extendregion_info[0][pos][s][0][-1]
+            total_depth += dict_extendregion_info[0][pos][s][0][-1]  # total depth on both strand?
     if starpos_genome[0] not in dict_extendregion_info[0]:
         star_depth = 0
     elif strand not in dict_extendregion_info[0][starpos_genome[0]]:
@@ -1736,18 +1738,25 @@ def check_expression(ss, dict_extendregion_info, maturepos_genome, mature_depth,
         for length, depth in  dict_extendregion_info[0][starpos_genome[0]][strand][1]:
             if length == starlen:
                 star_depth = depth
-
+    for i in range (maturepos_genome[0]-3, maturepos_genome[0]+4):  # total isoform depth
+        if i in dict_extendregion_info[0]:
+            if strand not in dict_extendregion_info[0][i]:
+                continue
+            for length, depth in  dict_extendregion_info[0][i][strand][1]:
+                if abs(length-maturelen) < 4:
+                    mature_isoform_depth += depth
     ratio = (mature_depth+star_depth)/float(total_depth)
+    ratio_matureisoform = (mature_isoform_depth)/float(total_depth)
     #print("T, M, S, R", total_depth, mature_depth, star_depth, ratio)
-    return star_depth, ratio, total_depth
+    return star_depth, ratio, total_depth, ratio_matureisoform
 
 
 def check_loci(structures, matures, region, dict_aln, which):
     miRNAs = []
     for m0, m1, strand, mdepth in matures:
         # TODO Move this if to previous stage.
-        # if mature length is not in [19-24], then ignore this
-        if m1-m0 <19 or m1-m0>24:
+        # if mature length is not in [18-24], then ignore this
+        if m1-m0 <18 or m1-m0>24:
             continue
         lowest_energy = 0
         lowest_energy = 0
@@ -1776,7 +1785,7 @@ def check_loci(structures, matures, region, dict_aln, which):
                                           structinfo[1], ss, strand, True]
                             lowest_energy = energy
                     else:  #  no star expression
-                        if exprinfo[1] >=0.8 and exprinfo[2] > 1000:  # but very high expression
+                        if exprinfo[3] >=0.8 and exprinfo[2] > 1000:  # but very high expression
                             #  The last 'False' means this is not an confident miRNA
                             outputinfo = [region[0], structinfo[2],
                                           structinfo[3], m0, m1, structinfo[0],
@@ -1791,6 +1800,7 @@ def filter_next_loci(alndumpname, rnalfoldoutname, minlen=50):
     list_miRNA_loci = []
     alnf = open(alndumpname)
     ss_generator = get_structures_next_extendregion(rnalfoldoutname, minlen)
+
     while True:
         region = None
         which = None
@@ -1965,7 +1975,7 @@ def gen_mirna_info(resultlist, fastaname, combinedsortedbamname, samplenames):
             if startpos < mirna[1] or startpos+readlen > mirna[2]:
                 continue
             depth = int(get_read_depth_fromID_as_string(sp[0]))
-            read_sample = sp[0].split("_")[0].strip(">")
+            read_sample = "_".join(sp[0].split("_")[:-2]).strip(">")  # sample name could contain "_"
             aln_strand = "+"
             if int(sp[1]) & 16:  # on minus strand
                 aln_strand = "-"

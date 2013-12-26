@@ -601,7 +601,7 @@ def prepare_data(dict_option, outtempfolder, logger):
     #removing reads that are overlapped with features in the gff file, if provided.
     if os.path.exists(dict_option["GFF_FILE"]):
         #TODO: minlen should be user adjustable, not fix here.
-        tempkeepregion = gen_keep_regions_from_gff(dict_option["GFF_FILE"], outtempfolder, dict_len, 60)
+        tempkeepregion = gen_keep_regions_from_gff(dict_option["GFF_FILE"], outtempfolder, dict_len, 55)
         if logger:
             logger.info("Removing reads that are overlapped with features in the gff file.")
         combinedbamname = gen_keep_regions_sort_bam(combinedbamname, tempkeepregion, os.path.join(outtempfolder,"combined.filtered"))
@@ -1371,11 +1371,32 @@ def get_structures_next_extendregion(rnalfoldoutname, minlen,
                 if len(sp) >=3:  # structure line
                     if len(sp[0]) < minlen:
                         continue
-                    elif (not is_stem_loop(sp[0],minloop)) and (not has_one_good_bifurcation(sp[0])):
-                        continue
                     norm_energy = energypattern.search(line).group(1)
                     norm_energy = float(norm_energy)/len(sp[0])
-                    structures.append((norm_energy,int(sp[-1]), sp[0]))
+                    sstype = -1
+                    if is_stem_loop(sp[0], minloop):
+                        sstype = 0  # stemploop ()
+                        structures.append((norm_energy,int(sp[-1]), sp[0], sstype))
+                    else:
+                        subss, totalout = filter_ss(sp[0])
+                        if not subss:
+                            continue
+                        for cur_ss in subss:  #start, strcture
+                            if is_stem_loop(cur_ss[1], minloop):
+                                sstype = 0  # stemploop ()
+                                structures.append((norm_energy,int(sp[-1])+cur_ss[0], cur_ss[1], sstype))
+                                continue
+                            if has_one_good_bifurcation(cur_ss[1]):
+                                sstype = 1
+                                #  TODO: use whole structure energy as sub ss energy now.
+                                structures.append((norm_energy,int(sp[-1])+cur_ss[0], cur_ss[1], sstype))
+                        # if has_one_good_bifurcation(sp[0]):
+                        #     sstype = 1  # good bifurcation (()())
+                        # else:
+                        #     if two_parallel_stems(sp[0]):
+                        #         sstype = 2  # ()()
+                        #     else:
+                        #         sstype = -1
                 else:
                     continue
         yield (which, structures)
@@ -1439,6 +1460,71 @@ def has_one_good_bifurcation(ss):
             if float(dict_pos[second_bi_first])/len(ss) < 0.75:
                 return True
     return False
+
+
+def two_parallel_stems(ss):
+    # not an stem loop, but a structure with two parallel stems: ()().
+    stack = []
+    last = ""
+    stems = 0
+    for idx, char in enumerate(ss):
+        if char== ')':
+            stack.pop()
+            last = ')'
+            if len(stack) == 0:
+                stems += 1
+        if char=='(':
+            if last==')':
+                if len(stack)!=0:
+                    return False
+            last = '('
+            stack.append(char)
+    if stems == 2:
+        return True
+    return False
+
+
+
+def filter_ss(ss):
+    #input is not stemloop, use is_stem_loop to filter out stemloops
+    stack = []
+    dict_pair = {}
+    for idx, char in enumerate(ss):
+        if char == '(':
+            stack.append(idx)
+            continue
+        if char == ')':
+            first = stack.pop()
+            dict_pair[first] = idx
+            dict_pair[idx] = first
+    result = []
+
+    prefirst = ss.find('(')
+    prelast = dict_pair[prefirst]
+    curfirst = prefirst
+    curlast = prelast
+    pregap = [0, prefirst]
+    aftergap=[]
+    totaloutstems = 1  # the number of outmost stems
+    while curfirst != -1:
+        curfirst = ss.find('(', prelast)
+        if curfirst == -1:  # the previous is the last one
+            aftergap = [prelast+1, len(ss)]
+        else:
+            aftergap = [prelast+1, curfirst]
+            curlast = dict_pair[curfirst]
+            totaloutstems += 1
+        if prelast - prefirst > 0:
+            result.append((pregap[0],aftergap[1]))
+        pregap = aftergap
+        prelast = curlast
+        prefirst = curfirst
+    ret = []
+    for s, e in result:
+        length = e - s
+        if length > 55:
+            ret.append((s, ss[s:e]))
+    return (ret, totaloutstems)
 
 
 def pos_genome_2_local(genomestart, genomeend, strand, regionstart, regionend,
@@ -1761,7 +1847,7 @@ def check_loci(structures, matures, region, dict_aln, which):
         lowest_energy = 0
         lowest_energy = 0
         outputinfo = []
-        for energy, foldstart, ss in structures[1]:
+        for energy, foldstart, ss, sstype in structures[1]:
             if energy > lowest_energy:
                 continue
             else:

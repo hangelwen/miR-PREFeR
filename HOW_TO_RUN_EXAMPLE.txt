@@ -39,24 +39,24 @@ in this folder, please remove the example-result folder first.
 Then change the 'CHECKPOINT_SIZE' option to a smaller value (30, for
 example). The reason to do this is that by default the pipeline makes a
 checkpoint after finishing folding every 3000 sequences, but the sample data is
-so small that the total number of sequences is much smaller than the default.
+so small that the total number of sequences is smaller than the default.
 
 Then run the pipeline with 'pipeline' command:
 
-    python ../miR_PREFeR.py -l -k pipeline config.example
+    python ../miR_PREFeR.py -L -k pipeline config.example
 
 After running for a while (10 seconds, for example. You should let it run for
 enough time to do at least one checkpoint. A "Done" is shown when a checkpoint
 is applied), kill the process by "Ctrl-C". To check where the pipeline was stopped,
 run:
 
-    python ../miR_PREFeR.py -l check config.example
+    python ../miR_PREFeR.py -L check config.example
 
 This will show the checkpoint information.
 
 To restart the pipeline from where it was stopped, run:
 
-    python ../miR_PREFeR.py -l recover config.example
+    python ../miR_PREFeR.py -L recover config.example
 
 The pipeline will continue to finish the job specified in the config.example
 file.

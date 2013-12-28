@@ -178,7 +178,7 @@ The miR-PREFeR pipeline checks the SAM format and if the format is not correct, 
 
 #### c). The (optional) genome annotation file in gff3 format ####
 
-For a genome with known annotations, some regions in the genome can be excluded when doing the miRNA analysis. For example, many species have protein coding sequence (CDS) annotations, so there is no need to do run miR-PREFeR on those regions. These regions should be listed in a GFF file (<http://www.sanger.ac.uk/resources/software/gff/spec.html>). Note that for the gff file, you should only contain CDS regions, not introns because miRNAs could be in introns.
+For a genome with known annotations, some regions in the genome can be excluded when doing the miRNA analysis. For example, many species have protein coding sequence (CDS) annotations, so there is no need to run miR-PREFeR on those regions. Most plant genomes contain highly repetitive regions such as transposons, these regions should also be excluded. These regions should be listed in a GFF file (<http://www.sanger.ac.uk/resources/software/gff/spec.html>). Note that for the gff file, you should not contain introns, because miRNAs could be in introns.
 
 ### b. Prepare a configuration file for the pipeline. ###
 

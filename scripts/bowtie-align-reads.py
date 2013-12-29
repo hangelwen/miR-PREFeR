@@ -163,7 +163,7 @@ def run_bowtie_build(fastalist, tempfolder):
         command = command + fasta + " "
 
     command = command + " " + os.path.join(tempfolder, "genomeindex")
-    sys.stdout.write("Indexing reference genomes, command:\n")
+    sys.stdout.write("\nIndexing reference genomes, command:\n")
     sys.stdout.write(command+'\n')
     outerr = ""
     try:
@@ -185,7 +185,7 @@ def run_bowite(fastaname, outname, indexbase, options):
     command = command + indexbase + " " + " -f " + fastaname
     fout = open(outname, 'w')
     try:
-        sys.stdout.write("Mapping file " + fastaname + ", command:\n")
+        sys.stdout.write("\nMapping file " + fastaname + ", command:\n")
         sys.stdout.write(command+"\n")
         bowtie_process = subprocess.check_call(command.split(), stdout=fout)
         return outname
@@ -198,7 +198,7 @@ def run_bowite(fastaname, outname, indexbase, options):
 def filter_unmapped_alignment(samname, newsamname):
     command = "samtools view -Sh -F 4 " + samname + " -o " + newsamname
     try:
-        sys.stdout.write("Filtering unmapped alignments, command:\n")
+        sys.stdout.write("\nFiltering unmapped alignments, command:\n")
         sys.stdout.write(command+"\n")
         filter_process = subprocess.check_call(command.split())
         return newsamname

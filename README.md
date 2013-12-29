@@ -149,7 +149,7 @@ The command first generates the bowtie index files in the bowtie-index/ folder f
 
     python bowtie-align-reads.py -h
 
-For those who prefer to use bowtie directly (for example, users want to more bowtie options), please refer to Section [Conducting alignment using Bowtie](5-conducting-alignment-using-bowtie). The section contains the steps to do alignments using bowtie and the format of the SAM files required by the miR-PREFeR pipeline.
+For those who prefer to use bowtie directly (for example, users want to more bowtie options), please refer to Section [Conducting alignment using Bowtie](#5-conducting-alignment-using-bowtie). The section contains the steps to do alignments using bowtie and the format of the SAM files required by the miR-PREFeR pipeline.
 
 
 

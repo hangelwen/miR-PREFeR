@@ -2,8 +2,7 @@ import sys
 import os
 import multiprocessing
 
-'''
-
+"""
 Pre-precess a list of collapsed fasta format read files. The input read files
 following the miRDeep2 naming convention: the identifier of each read ends with
 "_xN", where 'N' is the depth of the read in the library. The new identifier for
@@ -19,7 +18,7 @@ The script assumes each read sequence occupies ONLY one line in the input file.
 The output files are in the same folder as the input files, with ".processed "
 as suffix.
 
-'''
+"""
 
 sys.stderr.write("========================================================================================= \n")
 sys.stderr.write("Pre-processing RNAseq fasta files (mirdeep2 format).\n")

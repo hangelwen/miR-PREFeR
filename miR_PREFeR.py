@@ -2281,8 +2281,11 @@ def gen_map_result(dict_mirna_info, foldername):
             outlines.append("5'->3'")
             outlines.append(preseq+"\ttotal_mapped_reads="+str(dict_mirna_info['info_dict'][mirna][sample]['reads_pre']))
             outlines.append(ss)
-            for startpos in sorted(dict_mirna_info['info_dict'][mirna][sample]['reads_maps'].keys()):
-                for r in dict_mirna_info['info_dict'][mirna][sample]['reads_maps'][startpos]:
+            sortedkeys = sorted(dict_mirna_info['info_dict'][mirna][sample]['reads_maps'].keys())
+            if dict_mirna_info['info_dict'][mirna]['strand'] == "-":
+                sortedkeys = sorted(dict_mirna_info['info_dict'][mirna][sample]['reads_maps'].keys(), reverse=True)
+            for startpos in sortedkeys:
+                for r in sorted(dict_mirna_info['info_dict'][mirna][sample]['reads_maps'][startpos], key=lambda tup: len(tup[0])):
                     outstr = ""
                     padchar = '.'
                     if (startpos==dict_mirna_info['info_dict'][mirna]['mature_start']) and (len(r[0])==len(matureseq)):

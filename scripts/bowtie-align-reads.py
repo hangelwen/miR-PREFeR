@@ -236,7 +236,7 @@ if __name__ == '__main__':
         if options.temp:
             tempfolder = os.path.expanduser(options.temp)
             if not os.path.exists(tempfolder):
-                os.mkdirs(tempfolder)
+                os.makedirs(tempfolder)
             indexfolder = tempfolder
         else:
             indexfolder = tempfile.mkdtemp(prefix='bowtie-index')

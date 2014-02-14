@@ -95,7 +95,6 @@ def parse_configfile(configfile):
         "OUTFOLDER":"./",
         "NAME_PREFIX":"",
         "PIPELINE_PATH":"",
-        "ONLY_SEQ":[],
         "DELETE_IF_SUCCESS":"Y",
         "CHECKPOINT_SIZE":3000  #checkpoint every 3000 sequences
     }
@@ -117,10 +116,6 @@ def parse_configfile(configfile):
                             sys.exit(-1)
                         dict_option[key].append(os.path.expanduser(name.strip()))
                     continue
-                if key == "ONLY_SEQ":
-                    names = sp[1].split(",")
-                    for name in names:
-                        dict_option[key].append(name.strip())
                 if key == "GFF_FILE" or key == "FASTA_FILE":
                     if not os.path.exists(os.path.expanduser(sp[1].strip())):
                         sys.stderr.write("File " + sp[1].strip() +
@@ -168,6 +163,17 @@ def parse_configfile(configfile):
         exit(-1)
 
     return dict_option
+
+
+def display_dict_option(dict_option):
+    write_formatted_string_withtime("", 30, sys.stdout)
+    sys.stdout.write("============================================================================\n")
+    sys.stdout.write("===============Configurations for this experiment:==========================\n")
+    sys.stdout.write("============================================================================\n")
+    for k in sorted(dict_option.keys()):
+        print(k+": "+str(dict_option[k]))
+    sys.stdout.write("============================================================================\n")
+    sys.stdout.write("============================================================================\n\n")
 
 
 def get_current_local_time():
@@ -224,6 +230,104 @@ def get_read_depth_fromID_as_string(seqid):
         return  m.groups()[0]
     else:
         raise Exception('Read Id format is not right. Read id must be in "samplename_rA_xN" format. See readme section "Prepare input data for the pipeline."\n')
+
+
+
+def check_gff(gffname):
+    '''
+    Check the input gff file is in the right format.
+    We did not check all the requirements made by the GFF3 format, but only
+    those fields that are essential for our pipeline.
+
+    Note that fields on each line MUST be separated with one TAB, not SPACE. This
+    is a requirement of the GFF3 format.
+
+    The return value is a tuple with two elements. The first one is True/False.
+    if True, the second is a set containing all the IDs of the sequences; if
+    False, the second is a error message.
+
+    '''
+    set_ids = set()
+    good_count = 0
+    with open(gffname) as f:
+        for idx, line in enumerate(f):
+            if line.startswith("#"):
+                if line.startswith("##FASTA"):
+                    if good_count == 0:
+                        return (False, "No GFF entry in the given gff file.")
+                    else:
+                        return (True, set_ids)
+                else:
+                    continue
+            else:
+                sp = line.strip().split('\t')
+                if len(sp) != 9:
+                    return (False, "Line "+str(idx+1) +" does not have " +
+                            str(len(sp))+
+                            " fields, 9 required. Make sure fields on one line is separated by one TAB, not SPACEs.")
+                else:
+                    try:
+                        start = int(sp[3])
+                    except ValueError:
+                        return (False, "Column 4 on line "+str(idx+1) +" should be an integer.")
+                    try:
+                        end = int(sp[4])
+                    except ValueError:
+                        return (False, "Column 5 on line "+str(idx+1) +" should be an integer.")
+                    if end < start:
+                        return (False, "End position is smaller than start position on line "+str(idx+1) +".")
+                    else:
+                        set_ids.add(sp[0])
+                        good_count += 1
+    return (True, set_ids)
+
+
+def check_reference(refname):
+
+    '''
+    Check the reference file. The reference file should be a multi-fasta file.
+
+    The return value is a tuple with two elements. The first one is True/False.
+    if True, the second is a set containing all the IDs of the sequences; if
+    False, the second is a error message.
+
+    Because miR-PREFeR uses samtools, and samtools requires all sequence lines
+    of an entry have the same length except the last line, all sequence ID
+    lines do not contain white space. So we check the following:
+    1.  The ID of each sequence is unique. Each ID line starts with ">" and
+    should only contain 0-9, a-Z, underscore(_), and dash(-).
+    2.  There is no black lines in between the sequence line of each entry.
+    3.  Each sequence line of the same entry is of fixed length, except the last
+    line of each entry.
+
+    '''
+
+    command = "samtools faidx " + refname
+    try:
+        subprocess.check_call(command.split())
+    except subprocess.CalledProcessError:
+        return (False, 0)
+
+    idpattern = r'^>\s*([-_a-zA-Z0-9]+)\s*$'
+    dict_refID = {}
+    with open(refname) as f:
+        refID = ""
+        for idx, line in enumerate(f):
+            if line.startswith(">"):
+                m = re.match(idpattern, line.rstrip())
+                if m:
+                    refID = m.groups()[0]
+                    if refID in dict_refID:  #duplicate ID
+                        return (False, "More than one sequence have the same sequence ID: " + refID)
+                    else:
+                        dict_refID[refID] = 1
+                else:
+                    return (False, "Sequence ID at line " + str(idx+1) + " is not correct. Please make sure that the sequence ID line starts with '>', and the sequence ID only contains a-z, A-Z, 0-9, underscore(_), and dash(-).")
+            else:
+                continue
+    return (True, dict_refID)
+
+
 
 def check_sam_format(samname):
     '''
@@ -450,7 +554,9 @@ def gen_keep_regions_from_gff(gffname, tmpdir, dict_len, minlen):
 def sam2bam(samfile, bamfile):
     command = "samtools view -bS -o " + bamfile + " " + samfile
     try:
+        write_formatted_string_withtime("Command: "+command, 30, sys.stdout)
         subprocess.check_call(command.split())
+        write_formatted_string_withtime("Done sam2bam.", 30, sys.stdout)
     except Exception as e:
         sys.stderr.write("Error occurred when converting SAM to BAM\n")
         sys.exit(-1)
@@ -563,6 +669,7 @@ def prepare_data(dict_option, outtempfolder, logger):
 
     if logger:
         logger.info("Getting genomic sequence lengths.")
+    write_formatted_string_withtime("Getting genomic sequence lengths.", 30, sys.stdout)
     #get the length of all the genomic sequences in the fasta/alignment files
     dict_len = get_length_from_sam(dict_option["ALIGNMENT_FILE"][0])
 
@@ -570,6 +677,8 @@ def prepare_data(dict_option, outtempfolder, logger):
     if not os.path.exists(dict_option["FASTA_FILE"]): #index the genome
         index_command = "samtools faidx " + dict_option["FASTA_FILE"]
         try:
+            write_formatted_string_withtime("Indexing reference seqeunces.", 30, sys.stdout)
+            write_formatted_string("Command: "+index_command, 30, sys.stdout)
             subprocess.check_call(index_command.split())
         except Exception as e:
             if logger:
@@ -581,10 +690,12 @@ def prepare_data(dict_option, outtempfolder, logger):
     #convert the SAM files(generated by Bowtie) to BAM files
     if logger:
         logger.info("Converting SAM files to BAM files using samtools.")
+    write_formatted_string_withtime("Converting SAM files to BAM files using SAMtools.", 30, sys.stdout)
     bamfiles = []
     for samname in dict_option["ALIGNMENT_FILE"]:
         if logger:
             logger.info("Converting "+samname)
+            write_formatted_string_withtime("Converting "+samname, 30, sys.stdout)
         bamname = os.path.join(outtempfolder, os.path.basename(samname)+".bam")
         sam2bam(samname, bamname)
         bamfiles.append(bamname)
@@ -594,6 +705,7 @@ def prepare_data(dict_option, outtempfolder, logger):
         #combine multiple BAM files from multiple sample together
         if logger:
             logger.info("Combining multiple BAM files from multiple samples together.")
+        write_formatted_string_withtime("Combining multiple BAM files from multiple samples together.", 30, sys.stdout)
         combine_bamfiles(dict_option["ALIGNMENT_FILE"][0], combinedbamname, *bamfiles)
     else:
         shutil.copyfile(bamfiles[0], combinedbamname)
@@ -601,6 +713,7 @@ def prepare_data(dict_option, outtempfolder, logger):
     #removing reads that are overlapped with features in the gff file, if provided.
     if os.path.exists(dict_option["GFF_FILE"]):
         #TODO: minlen should be user adjustable, not fix here.
+        write_formatted_string_withtime("Removing reads that are overlapped with features in the gff file.", 30, sys.stdout)
         tempkeepregion = gen_keep_regions_from_gff(dict_option["GFF_FILE"], outtempfolder, dict_len, 55)
         if logger:
             logger.info("Removing reads that are overlapped with features in the gff file.")
@@ -1056,6 +1169,7 @@ def dump_loci_seqs_and_alignment_multiprocess(dict_loci, piece_info_list,
         fout.close()
         foutdump.close()
         queue.put(((outputfastaname, outputalnname), num_loci, num_seq))
+        queue.put("done")
         queue.close()
 
     if logger:
@@ -1078,12 +1192,29 @@ def dump_loci_seqs_and_alignment_multiprocess(dict_loci, piece_info_list,
         jobs.append(p)
     total_loci = 0
     total_seq = 0
-    for job in jobs:
-        job.join()
-        info = inforqueue.get()
-        total_loci += info[1]
-        total_seq += info[2]
-        finalresult.append(info[0])
+    num_joined = 0
+    while True:
+        try:
+            if num_joined == len(jobs):
+                for job in jobs:
+                    job.join()
+                break
+            info = inforqueue.get_nowait()
+            if info == "done":
+                num_joined += 1
+            else:
+                total_loci += info[1]
+                total_seq += info[2]
+                finalresult.append(info[0])
+        except Queue.Empty:
+            time.sleep(2)
+            continue
+    # for job in jobs:
+    #     job.join()
+    #     info = inforqueue.get()
+    #     total_loci += info[1]
+    #     total_seq += info[2]
+    #     finalresult.append(info[0])
     finalresult.sort()
     return total_loci, total_seq, finalresult
 
@@ -2412,6 +2543,7 @@ def fold_use_RNALfold(inputfastalist, tempfolder, dict_option, maxspan, chunksiz
                 rnaoutname = next_chunk[1] + ".rnafoldout"
                 outputfile = open(rnaoutname, 'w')
                 inputfile = open(next_chunk[1])
+                write_formatted_string("[In fold]: Folding " + inputname, 30, sys.stdout)
                 subprocess.check_call(command.split(), stdin=inputfile, stdout=outputfile)
                 outputfile.close()
                 recoverfile = open(recovername, 'r')
@@ -2428,7 +2560,7 @@ def fold_use_RNALfold(inputfastalist, tempfolder, dict_option, maxspan, chunksiz
                 os.fsync(recoverfile_temp.fileno())
                 recoverfile_temp.close()
                 os.rename(recovername_temp, recovername)  # This is atomic on Unix, not work on Windows
-                write_formatted_string("In fold: " + inputname + ": "+str(dict_recover_infold["finishedseq"]) +" sequences folded. Checkpoint done.", 30, sys.stdout)
+                write_formatted_string("[In fold]: " + inputname + ": "+str(dict_recover_infold["finishedseq"]) +" sequences folded. Checkpoint done.", 30, sys.stdout)
                 # remove current chunk
                 os.unlink(next_chunk[1])
                 next_chunk = gen_next_chunk(inputname, tempfolder,  next_chunk[0], chunksize)
@@ -2523,6 +2655,34 @@ def run_check_sam_format(dict_option):
         return False
     return True
 
+def run_check_fasta_format(dict_option):
+    write_formatted_string_withtime("Checking reference sequence format.", 30, sys.stdout)
+    ret = check_reference(dict_option["FASTA_FILE"])
+    if ret[0]:
+        write_formatted_string("*** Reference file OK.", 30, sys.stdout)
+        return True
+    else:
+        if ret[1]==0:
+            write_formatted_string("!!! The format of the input fasta file in not correct. Because the pipeline uses samtools to manipulate fasta file, there are some requirement for the fasta file:", 30, sys.stdout)
+            write_formatted_string("1. The ID line of each sequence must start with '>'. The ID of each sequence must only contain 0-9, a-z, A-Z, underscore(_), and dash(-).", 30, sys.stdout)
+            write_formatted_string("2. The ID of each sequence must be unique.", 30, sys.stdout)
+            write_formatted_string("3. Each sequence line of one sequence must be the same length, except the last line.", 30, sys.stdout)
+            write_formatted_string("4. There should be no blank lines.", 30, sys.stdout)
+        else:
+            write_formatted_string("!!! " + ret[1], 30, sys.stdout)
+        return False
+
+def run_check_gff(dict_option):
+    write_formatted_string_withtime("Checking the format of the GFF file.", 30, sys.stdout)
+
+    ret = check_gff(dict_option["GFF_FILE"])
+    if ret[0]:
+        write_formatted_string("*** GFF file OK.", 30, sys.stdout)
+        return True
+    else:
+        write_formatted_string("!!! " + ret[1], 30, sys.stdout)
+        return False
+
 def run_check(dict_option, outtempfolder, recovername):
     write_formatted_string_withtime("Checking RNALfold and samtools", 30, sys.stdout)
     if not check_RNALfold():
@@ -2562,6 +2722,9 @@ def run_check(dict_option, outtempfolder, recovername):
             write_formatted_string("!!! SAMfile flags are not in the right format, please refer to the README.", 30, sys.stdout)
     if sam_not_right:
         write_formatted_string_withtime("!!! Please make sure the SAM format is in the right format as descripted in the README.", 30, sys.stdout)
+
+    run_check_fasta_format(dict_option)
+    run_check_gff(dict_option)
 
     last_stage = detect_stage_last_finished(recovername)
     if last_stage == "fold":
@@ -2620,7 +2783,7 @@ def run_prepare(dict_option, outtempfolder, recovername):
     if dict_option["LOG"]:
         logger = dict_option["LOGGER"]
         logger.info("Starting preparing data for the 'candidate' stage.")
-    write_formatted_string_withtime("Starting preparing data for the 'candidate' stage.\n", 30, sys.stdout)
+    write_formatted_string_withtime("Starting preparing data for the 'candidate' stage.", 30, sys.stdout)
     combinedbamname, expandedsamname, expandedbamname, expandedbam_plus, expandedbam_minus = prepare_data(dict_option, outtempfolder, logger)
     samplenames = []
     for name in dict_option["ALIGNMENT_FILE"]:
@@ -2651,7 +2814,7 @@ def run_prepare(dict_option, outtempfolder, recovername):
     cPickle.dump(dict_recover,recoverfile)
     if logger:
         logger.info("Recovery file successfully updated.")
-    write_formatted_string_withtime("Done\n", 30, sys.stdout)
+    write_formatted_string_withtime("Done (prepare stage)\n", 30, sys.stdout)
     if logger:
         logger.info("=========================Done (prepare stage)=======================\n\n")
 
@@ -2685,9 +2848,14 @@ def run_candidate(dict_option, outtempfolder, recovername):
     expandedbam_minus = dict_recover["finished_stages"]["prepare"]["expandedbam_minus"]
     #if the length of a contig is smaller than min_contig_len, then ignore it
     min_contig_len = 19
+    write_formatted_string_withtime("Generating peaks.", 30, sys.stdout)
     depthfilename, dict_contigs = gen_contig_typeA(expandedbam_plus,expandedbam_minus, dict_option, min_contig_len, logger)
+    write_formatted_string_withtime( "Peaks generated.", 30, sys.stdout)
+    write_formatted_string_withtime( "Combining peaks to form candidate regions.", 30, sys.stdout)
     dict_loci, piece_info = gen_candidate_region_typeA(dict_contigs,dict_len,dict_option,outtempfolder, logger)
     #  a list of (rnafoldinfasta, lociinfodump)  pairs
+    write_formatted_string_withtime( "Candidate regions generated.", 30, sys.stdout)
+    write_formatted_string_withtime( "Getting sequences of candidate regions.", 30, sys.stdout)
     num_loci, num_fasta, retnames = dump_loci_seqs_and_alignment_multiprocess(dict_loci,
                                                                               piece_info,
                                                                               combinedbamname,
@@ -2695,7 +2863,7 @@ def run_candidate(dict_option, outtempfolder, recovername):
                                                                               rnalfoldinputprefix,
                                                                               outputdumpprefix,
                                                                               logger)
-
+    write_formatted_string_withtime( "All sequences generated.", 30, sys.stdout)
     loci_dump_file = open(loci_dump_name, 'wb')
     cPickle.dump(dict_loci, loci_dump_file, protocol=2)
     loci_dump_file.close()
@@ -2723,7 +2891,7 @@ def run_candidate(dict_option, outtempfolder, recovername):
 
     outstr = "{0} candidate loci generated, {1} regions to fold.".format(num_loci, num_fasta)
     write_formatted_string(outstr, 30, sys.stdout)
-    write_formatted_string_withtime("Done\n", 30, sys.stdout)
+    write_formatted_string_withtime("Done (candidate stage)\n", 30, sys.stdout)
     if logger:
         logger.info(outstr)
     if logger:
@@ -2782,7 +2950,7 @@ def run_fold(dict_option, outtempfolder, recovername, tryrecover):
     cPickle.dump(dict_recover,recoverfile)
     if logger:
         logger.info("Recovery file successfully updated.")
-    write_formatted_string_withtime("Done\n", 30, sys.stdout)
+    write_formatted_string_withtime("Done (fold stage)\n", 30, sys.stdout)
     if logger:
         logger.info("=========================Done (fold stage)=======================\n\n")
 
@@ -2875,7 +3043,7 @@ def run_predict(dict_option, outtempfolder, recovername):
         logger.info("Recovery file successfully updated.")
     outstr = "{0} miRNAs identified.".format(len(result))
     write_formatted_string(outstr, 30, sys.stdout)
-    write_formatted_string_withtime("Done\n", 30, sys.stdout)
+    write_formatted_string_withtime("Done (predict stage)\n", 30, sys.stdout)
     if logger:
         logger.info(outstr)
     if logger:
@@ -2896,7 +3064,7 @@ def run_removetmp(outtempfolder):
 
 if __name__ == '__main__':
     dict_option = parse_option_optparse()
-
+    display_dict_option(dict_option)
     has_multiple_sample = False
     if len(dict_option['ALIGNMENT_FILE'])>1:
         has_multiple_sample = True
@@ -2924,6 +3092,17 @@ if __name__ == '__main__':
     samgood = run_check_sam_format(dict_option)
     if not allgood or not samgood:
         exit(-1)
+    sys.stdout.write("\n\n")
+
+    fasta_good = run_check_fasta_format(dict_option)
+    if not fasta_good:
+        exit(-1)
+
+    sys.stdout.write("\n\n")
+    gff_good = run_check_gff(dict_option)
+    if not gff_good:
+        exit(-1)
+    sys.stdout.write("\n\n")
 
     logger = None
     if dict_option['LOG']:

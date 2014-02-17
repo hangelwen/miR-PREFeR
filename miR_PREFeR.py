@@ -72,7 +72,7 @@ configfile: configuration file"""
     if len(args) != 2:
          parser.error("incorrect number of arguments. Run the script with -h option to see help.")
     if args[0] not in actions:
-        parser.error("unknow command")
+        parser.error("unknown command")
     dict_option = parse_configfile(args[1])
     dict_option['ACTION'] = args[0]
     dict_option["LOG"] = options.log
@@ -464,9 +464,9 @@ def get_RNALfold_version():
         check_process = subprocess.Popen(command.split(), stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         outmessage, outerr = check_process.communicate()
     except Exception as e:
-        return "UnknowVersion"
+        return "Unknown"
     if outmessage == "":
-        return "UnknowVersion"
+        return "Unknown"
     else:
         return str(outmessage).strip()
 
@@ -544,9 +544,18 @@ def gen_keep_regions_from_gff(gffname, tmpdir, dict_len, minlen):
     tempbedname = os.path.join(tmpdir, "temp.keepregion.bed")
     command = "sort -k1,1 -k4,4n " + tempgffunsortname + " -o " + tempgffname
     try:
-        subprocess.check_call(command.split())
+        p = subprocess.Popen(command.split())
+        while True:
+            retcode = p.poll()
+            if retcode is None:
+                write_formatted_string_withtime("Sorting GFF file.", 30, sys.stdout)
+                time.sleep(10)
+            else:
+                write_formatted_string_withtime("GFF file sorting done.", 30, sys.stdout)
+                break
     except Exception as e:
-        sys.stderr.write("Error occurred when sorting the gff file\n")
+        sys.stderr.write("Error occurred when sorting the GFF file.\n")
+        sys.stderr.write("Exception message: " + str(e) + "\n")
         sys.exit(-1)
     foutput = open(tempbedname, 'w')
     seqids = dict_len.keys()
@@ -746,9 +755,9 @@ def prepare_data(dict_option, outtempfolder, logger):
     #removing reads that are overlapped with features in the gff file, if provided.
     if os.path.exists(dict_option["GFF_FILE"]):
         #TODO: minlen should be user adjustable, not fix here.
-        write_formatted_string_withtime("Removing reads that are overlapped with features in the gff file.", 30, sys.stdout)
+        write_formatted_string_withtime("Removing reads that are overlapped with features in the GFF file.", 30, sys.stdout)
         if logger:
-            logger.info("Removing reads that are overlapped with features in the gff file.")
+            logger.info("Removing reads that are overlapped with features in the GFF file.")
 
         tempkeepregion = gen_keep_regions_from_gff(dict_option["GFF_FILE"], outtempfolder, dict_len, 55)
         num_lines = 0
@@ -758,9 +767,9 @@ def prepare_data(dict_option, outtempfolder, logger):
                 if num_lines > 5:
                     break
         if num_lines==0:
-            write_formatted_string_withtime("No regions need to analyze after excluding regions in the GFF file, stop analyze!", 30, sys.stdout)
+            write_formatted_string_withtime("!!! No regions need to analyze after excluding regions in the GFF file, stop analyze!", 30, sys.stdout)
             if logger:
-                logger.info("No regions need to analyze after excluding regions in the GFF file, stop analyze!")
+                logger.info("!!! No regions need to analyze after excluding regions in the GFF file, stop analyze!")
             exit(-1)
 
         combinedbamname = gen_keep_regions_sort_bam(combinedbamname, tempkeepregion, os.path.join(outtempfolder,"combined.filtered"))
@@ -865,7 +874,7 @@ def gen_contig_typeA(expandedbam_plus, expandedbam_minus, dict_option,
         if region[2] - region[1] < contig_minlen:
             continue
         cnt += 1
-        if cnt%dict_option['CHECKPOINT_SIZE'] ==0:
+        if cnt % 20000 ==0:
             write_formatted_string_withtime(" .. generating peaks .." , 30, sys.stdout)
         dict_contigs.setdefault(region[0], []).append((region[1],region[2],region[3]))
     return depthfilename, dict_contigs
@@ -1136,7 +1145,7 @@ def dump_loci_seqs_and_alignment_multiprocess(dict_loci, piece_info_list,
                 loci_pos = str(loci[0][0]) + "-" + str(loci[0][1])
                 for idx, extendregion in enumerate(loci[1:]):
                     if num_seq % 3000 == 0:
-                        write_formatted_string_withtime(" .. generating candidate sequences ..", 30, sys.stdout)
+                        write_formatted_string_withtime(" .. generating candidate sequences, output file name: " + outputfastaname, 30, sys.stdout)
                     #extendregion is [), but faidx is []
                     region = seqid+":"+str(extendregion[0][0])+"-"+str(extendregion[0][1]-1)
                     regionpos = seqid+":"+str(extendregion[0][0])+"-"+str(extendregion[0][1])
@@ -1222,6 +1231,7 @@ def dump_loci_seqs_and_alignment_multiprocess(dict_loci, piece_info_list,
                                 cPickle.dump(minus_dumpinfo[which], foutdump, protocol=2)
         fout.close()
         foutdump.close()
+        write_formatted_string_withtime(" Done: generating candidate sequences, output file name: " + outputfastaname, 30, sys.stdout)
         queue.put(((outputfastaname, outputalnname), num_loci, num_seq))
         queue.put("done")
         queue.close()
@@ -1343,7 +1353,7 @@ def gen_candidate_region_typeA(dict_contigs, dict_len, dict_option, tmpdir,
             if len(regioninfo) > 1:  #  this means the previous for loop was executed at least once.
                 dict_loci[seqID].append(regioninfo)
                 total_loci += 1
-                if total_loci%dict_option["CHECKPOINT_SIZE"] == 0:
+                if total_loci%20000 == 0:
                     write_formatted_string_withtime(" .. combining peaks ..", 30, sys.stdout)
 
     #  generate information for using multiple processes to dumping loci info in
@@ -2737,7 +2747,7 @@ def run_check_gff(dict_option):
     write_formatted_string_withtime("Checking the format of the GFF file.", 30, sys.stdout)
     gffsize = os.path.getsize(dict_option["GFF_FILE"])/1024/1024
     if gffsize > 50:
-        write_formatted_string_withtime("!!! Warning: large GFF file size: " + str(gffsize) + "MB. Make sure the GFF file only contains regions needed to be excluded from miRNA prediction.", 30, sys.stdout)
+        write_formatted_string_withtime("!!! Warning: large GFF file size: " + str(gffsize) + "MB. Make sure the GFF file only contains regions that need to be excluded from miRNA prediction.", 30, sys.stdout)
     ret = check_gff(dict_option["GFF_FILE"])
     if ret[0]:
         write_formatted_string("*** GFF file OK.\n", 30, sys.stdout)

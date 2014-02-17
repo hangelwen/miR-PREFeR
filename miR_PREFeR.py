@@ -247,6 +247,8 @@ def check_gff(gffname):
     False, the second is a error message.
 
     '''
+
+
     set_ids = set()
     good_count = 0
     with open(gffname) as f:
@@ -260,6 +262,8 @@ def check_gff(gffname):
                 else:
                     continue
             else:
+                if not line.strip():  #empty lines
+                    continue
                 sp = line.strip().split('\t')
                 if len(sp) != 9:
                     return (False, "Line "+str(idx+1) +" does not have " +
@@ -294,8 +298,10 @@ def check_reference(refname):
     Because miR-PREFeR uses samtools, and samtools requires all sequence lines
     of an entry have the same length except the last line, all sequence ID
     lines do not contain white space. So we check the following:
-    1.  The ID of each sequence is unique. Each ID line starts with ">" and
-    should only contain 0-9, a-Z, underscore(_), and dash(-).
+    1.  The ID of each sequence is unique. Each ID line starts with ">". The ID
+    should only contain 0-9, a-Z, underscore(_), and dash(-). Everything after
+    the first blank character is ignored(ID only count to the first non-blank
+    character).
     2.  There is no black lines in between the sequence line of each entry.
     3.  Each sequence line of the same entry is of fixed length, except the last
     line of each entry.
@@ -308,7 +314,7 @@ def check_reference(refname):
     except subprocess.CalledProcessError:
         return (False, 0)
 
-    idpattern = r'^>\s*([-_a-zA-Z0-9]+)\s*$'
+    idpattern = r'^>\s*([-_a-zA-Z0-9]+)\s*.+$'
     dict_refID = {}
     with open(refname) as f:
         refID = ""
@@ -322,7 +328,7 @@ def check_reference(refname):
                     else:
                         dict_refID[refID] = 1
                 else:
-                    return (False, "Sequence ID at line " + str(idx+1) + " is not correct. Please make sure that the sequence ID line starts with '>', and the sequence ID only contains a-z, A-Z, 0-9, underscore(_), and dash(-).")
+                    return (False, "Sequence ID at line " + str(idx+1) + " is not correct. Please make sure that the sequence ID line starts with '>'. The sequence ID starts from the first non-blank character after '>' and counts until the first blank character. The sequence ID only contains a-z, A-Z, 0-9, underscore(_), and dash(-).")
             else:
                 continue
     return (True, dict_refID)
@@ -432,7 +438,15 @@ def check_samtools():
         if outerr.find("unrecognized") !=-1:
             message = "SAMtools sort command does not exist. Please make sure samtools is correctly installed and the version is > 0.1.15. Refer to the README for more infomation"
             return False, message
-        return True, "SAMtools installed."
+
+        command = "samtools"
+        version_num = "Unknown"
+        version_process = subprocess.Popen(command.split(), stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        outmessage, outerr = version_process.communicate()
+        m=re.search(r'([Vv]ersion.+)\n',outerr)
+        if m:
+            version_num = m.groups()[0]
+        return True, version_num
     else:
         return False, "SAMtools not installed or not in the PATH."
 
@@ -489,6 +503,24 @@ def index_genome(fastaname):
         sys.exit(-1)
 
 
+def gen_temp_gff(gffname, tmpdir):
+    tempgffname = os.path.join(tmpdir, "temp.remove.unsort.gff")
+    fout = open(tempgffname, 'w')
+    with open(gffname) as f:
+        for line in f:
+            if line.startswith("#"):
+                if line.startswith("##FASTA"):
+                    break
+                else:
+                    continue
+            else:
+                if not line.strip():
+                    continue
+                else:
+                    fout.write(line)
+    fout.close()
+    return tempgffname
+
 def gen_keep_regions_from_gff(gffname, tmpdir, dict_len, minlen):
     '''
     Generate a BED format file which contains all the regions that are not
@@ -506,10 +538,11 @@ def gen_keep_regions_from_gff(gffname, tmpdir, dict_len, minlen):
         else:
             return (min(r1[0],r2[0]), max(r1[1],r2[1]))
 
+    tempgffunsortname = gen_temp_gff(gffname, tmpdir)
     #sort the gff file
     tempgffname = os.path.join(tmpdir, "temp.remove.gff")
     tempbedname = os.path.join(tmpdir, "temp.keepregion.bed")
-    command = "sort -k1,1 -k4,4n " + gffname + " -o " + tempgffname
+    command = "sort -k1,1 -k4,4n " + tempgffunsortname + " -o " + tempgffname
     try:
         subprocess.check_call(command.split())
     except Exception as e:
@@ -714,9 +747,22 @@ def prepare_data(dict_option, outtempfolder, logger):
     if os.path.exists(dict_option["GFF_FILE"]):
         #TODO: minlen should be user adjustable, not fix here.
         write_formatted_string_withtime("Removing reads that are overlapped with features in the gff file.", 30, sys.stdout)
-        tempkeepregion = gen_keep_regions_from_gff(dict_option["GFF_FILE"], outtempfolder, dict_len, 55)
         if logger:
             logger.info("Removing reads that are overlapped with features in the gff file.")
+
+        tempkeepregion = gen_keep_regions_from_gff(dict_option["GFF_FILE"], outtempfolder, dict_len, 55)
+        num_lines = 0
+        with open(tempkeepregion) as f:
+            for line in f:
+                num_lines += 1
+                if num_lines > 5:
+                    break
+        if num_lines==0:
+            write_formatted_string_withtime("No regions need to analyze after excluding regions in the GFF file, stop analyze!", 30, sys.stdout)
+            if logger:
+                logger.info("No regions need to analyze after excluding regions in the GFF file, stop analyze!")
+            exit(-1)
+
         combinedbamname = gen_keep_regions_sort_bam(combinedbamname, tempkeepregion, os.path.join(outtempfolder,"combined.filtered"))
     else:
         combinedbamname = sort_index_bam(combinedbamname, os.path.join(outtempfolder,"combined.filtered"))
@@ -805,6 +851,7 @@ def gen_contig_typeA(expandedbam_plus, expandedbam_minus, dict_option,
     except Exception as e:
             sys.stderr.write("Error occurred when generating contigs(typeA).\n")
             sys.exit(-1)
+
     depthfilename = os.path.join(dict_option["OUTFOLDER"],dict_option["NAME_PREFIX"]+"_tmp", "bam.depth.cut"+str(dict_option["READS_DEPTH_CUTOFF"]))
     f=open(depthfilename,'w')
     f.write(output.decode())
@@ -812,9 +859,14 @@ def gen_contig_typeA(expandedbam_plus, expandedbam_minus, dict_option,
     if logger:
         logger.info("Generating contigs.")
     dict_contigs = {}
+    cnt = 0
     for region in get_next_non_zero_region(depthfilename):
+
         if region[2] - region[1] < contig_minlen:
             continue
+        cnt += 1
+        if cnt%dict_option['CHECKPOINT_SIZE'] ==0:
+            write_formatted_string_withtime(" .. generating peaks .." , 30, sys.stdout)
         dict_contigs.setdefault(region[0], []).append((region[1],region[2],region[3]))
     return depthfilename, dict_contigs
 
@@ -1083,6 +1135,8 @@ def dump_loci_seqs_and_alignment_multiprocess(dict_loci, piece_info_list,
                 minus_dumpinfo = []
                 loci_pos = str(loci[0][0]) + "-" + str(loci[0][1])
                 for idx, extendregion in enumerate(loci[1:]):
+                    if num_seq % 3000 == 0:
+                        write_formatted_string_withtime(" .. generating candidate sequences ..", 30, sys.stdout)
                     #extendregion is [), but faidx is []
                     region = seqid+":"+str(extendregion[0][0])+"-"+str(extendregion[0][1]-1)
                     regionpos = seqid+":"+str(extendregion[0][0])+"-"+str(extendregion[0][1])
@@ -1277,6 +1331,9 @@ def gen_candidate_region_typeA(dict_contigs, dict_len, dict_option, tmpdir,
     total_loci = 0  # the number of loci
     if logger:
         logger.info("Connect contigs that have a distance smaller than MAX_GAP.")
+
+
+
     for seqID in sorted(dict_contigs): #regions in the dict are already sorted.
         dict_loci[seqID] = []  # changed to a list, this preserves the order.
         for region, peaks in next_region_typeA(dict_contigs[seqID], dict_option["MAX_GAP"]):
@@ -1286,6 +1343,9 @@ def gen_candidate_region_typeA(dict_contigs, dict_len, dict_option, tmpdir,
             if len(regioninfo) > 1:  #  this means the previous for loop was executed at least once.
                 dict_loci[seqID].append(regioninfo)
                 total_loci += 1
+                if total_loci%dict_option["CHECKPOINT_SIZE"] == 0:
+                    write_formatted_string_withtime(" .. combining peaks ..", 30, sys.stdout)
+
     #  generate information for using multiple processes to dumping loci info in
     #  the next step. For each piece, we record the seq IDs the piece have, and
     #  the start index and end index in the first seqid and the last seqid. Then
@@ -2664,20 +2724,23 @@ def run_check_fasta_format(dict_option):
     else:
         if ret[1]==0:
             write_formatted_string("!!! The format of the input fasta file in not correct. Because the pipeline uses samtools to manipulate fasta file, there are some requirement for the fasta file:", 30, sys.stdout)
-            write_formatted_string("1. The ID line of each sequence must start with '>'. The ID of each sequence must only contain 0-9, a-z, A-Z, underscore(_), and dash(-).", 30, sys.stdout)
-            write_formatted_string("2. The ID of each sequence must be unique.", 30, sys.stdout)
-            write_formatted_string("3. Each sequence line of one sequence must be the same length, except the last line.", 30, sys.stdout)
-            write_formatted_string("4. There should be no blank lines.", 30, sys.stdout)
+            write_formatted_string("1. The ID line of each sequence must start with '>'.", 30, sys.stdout)
+            write_formatted_string("2. The sequence ID starts from the fisrt non-whitespace character until the first whitespace character. All characters after the first whitespace character are ignored. The ID of each sequence must only contain 0-9, a-z, A-Z, underscore(_), and dash(-).", 30, sys.stdout)
+            write_formatted_string("3. The ID of each sequence must be unique.", 30, sys.stdout)
+            write_formatted_string("4. Each sequence line of one sequence must be the same length, except the last line.", 30, sys.stdout)
+            write_formatted_string("5. There should be no blank lines.", 30, sys.stdout)
         else:
             write_formatted_string("!!! " + ret[1], 30, sys.stdout)
         return False
 
 def run_check_gff(dict_option):
     write_formatted_string_withtime("Checking the format of the GFF file.", 30, sys.stdout)
-
+    gffsize = os.path.getsize(dict_option["GFF_FILE"])/1024/1024
+    if gffsize > 50:
+        write_formatted_string_withtime("!!! Warning: large GFF file size: " + str(gffsize) + "MB. Make sure the GFF file only contains regions needed to be excluded from miRNA prediction.", 30, sys.stdout)
     ret = check_gff(dict_option["GFF_FILE"])
     if ret[0]:
-        write_formatted_string("*** GFF file OK.", 30, sys.stdout)
+        write_formatted_string("*** GFF file OK.\n", 30, sys.stdout)
         return True
     else:
         write_formatted_string("!!! " + ret[1], 30, sys.stdout)
@@ -2690,19 +2753,23 @@ def run_check(dict_option, outtempfolder, recovername):
         write_formatted_string("!!! Please refer to the README file for how to install and configuration RNALfold.", 30, sys.stdout)
     else:
         RNALfoldversion = get_RNALfold_version()
+
         if is_bug_RNALfold(RNALfoldversion.strip()):
             write_formatted_string("!!! The version of RNALfold (2.0.4) has a bug. ", 30, sys.stdout)
             write_formatted_string("!!! Please use the latest version of RNALfold", 30, sys.stdout)
             write_formatted_string("!!! Please refer to the README file for how to install and configurate RNALfold.", 30, sys.stdout)
         else:
             write_formatted_string("*** RNALfold is ready.", 30, sys.stdout)
+        write_formatted_string("!!! RNALfold version: " + RNALfoldversion, 30, sys.stdout)
 
     samtoolcheck =  check_samtools()
     if not samtoolcheck[0]:
         write_formatted_string("!!! "+samtoolcheck[1], 30, sys.stdout)
         write_formatted_string("!!! Please refer to the README file for how to install and configurate samtools.", 30, sys.stdout)
+        exit(-1)
     else:
-        write_formatted_string("*** SAMtools is ready.\n", 30, sys.stdout)
+        write_formatted_string("*** SAMtools is ready.", 30, sys.stdout)
+        write_formatted_string("*** SAMtools version: " + samtoolcheck[1] + "\n", 30, sys.stdout)
 
     write_formatted_string_withtime("Checking SAM file format", 30, sys.stdout)
     sam_not_right = False
@@ -2724,7 +2791,9 @@ def run_check(dict_option, outtempfolder, recovername):
         write_formatted_string_withtime("!!! Please make sure the SAM format is in the right format as descripted in the README.", 30, sys.stdout)
 
     run_check_fasta_format(dict_option)
-    run_check_gff(dict_option)
+
+    if os.path.exists(dict_option["GFF_FILE"]):
+        run_check_gff(dict_option)
 
     last_stage = detect_stage_last_finished(recovername)
     if last_stage == "fold":
@@ -2755,9 +2824,11 @@ def check_dependency():
             allgood = False
         else:
             write_formatted_string("*** RNALfold is ready.", 30, sys.stdout)
+        write_formatted_string("*** RNALfold version: " + RNALfoldversion, 30, sys.stdout)
     samtoolscheck =  check_samtools()
     if samtoolscheck[0]:
-        write_formatted_string("*** SAMtools is ready.\n", 30, sys.stdout)
+        write_formatted_string("*** SAMtools is ready.", 30, sys.stdout)
+        write_formatted_string("*** SAMtools version: "+samtoolscheck[1] + "\n", 30, sys.stdout)
     else:
         #write_formatted_string("!!! samtools is required but not installed/not in the PATH/wrong version.", 30, sys.stdout)
         #write_formatted_string("!!! Please refer to the README file for how to install and configurate samtools.", 30, sys.stdout)
@@ -2766,6 +2837,7 @@ def check_dependency():
         allgood = False
 
     return allgood
+
 
 def get_samplename_from_sam(samname):
     samplename = ""
@@ -2850,11 +2922,11 @@ def run_candidate(dict_option, outtempfolder, recovername):
     min_contig_len = 19
     write_formatted_string_withtime("Generating peaks.", 30, sys.stdout)
     depthfilename, dict_contigs = gen_contig_typeA(expandedbam_plus,expandedbam_minus, dict_option, min_contig_len, logger)
-    write_formatted_string_withtime( "Peaks generated.", 30, sys.stdout)
+    write_formatted_string_withtime( "All peaks generated.", 30, sys.stdout)
     write_formatted_string_withtime( "Combining peaks to form candidate regions.", 30, sys.stdout)
     dict_loci, piece_info = gen_candidate_region_typeA(dict_contigs,dict_len,dict_option,outtempfolder, logger)
     #  a list of (rnafoldinfasta, lociinfodump)  pairs
-    write_formatted_string_withtime( "Candidate regions generated.", 30, sys.stdout)
+    write_formatted_string_withtime( "All candidate regions generated.", 30, sys.stdout)
     write_formatted_string_withtime( "Getting sequences of candidate regions.", 30, sys.stdout)
     num_loci, num_fasta, retnames = dump_loci_seqs_and_alignment_multiprocess(dict_loci,
                                                                               piece_info,
@@ -3099,10 +3171,10 @@ if __name__ == '__main__':
         exit(-1)
 
     sys.stdout.write("\n\n")
-    gff_good = run_check_gff(dict_option)
-    if not gff_good:
-        exit(-1)
-    sys.stdout.write("\n\n")
+    if os.path.exists(dict_option["GFF_FILE"]):
+        gff_good = run_check_gff(dict_option)
+        if not gff_good:
+            exit(-1)
 
     logger = None
     if dict_option['LOG']:

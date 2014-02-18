@@ -2721,7 +2721,7 @@ def run_check_sam_format(dict_option):
         if not ret[2]:
             write_formatted_string("!!! SAMfile flags are not in the right format, please refer to the README.", 30, sys.stdout)
     if sam_not_right:
-        write_formatted_string("!!! Please make sure the SAM format is in the right format as descripted in the README.", 30, sys.stdout)
+        write_formatted_string("!!! Please make sure the SAM format is in the right format as described in the README.", 30, sys.stdout)
         return False
     return True
 
@@ -3067,7 +3067,10 @@ def run_predict(dict_option, outtempfolder, recovername):
     maturename = os.path.join(dict_option["OUTFOLDER"],dict_option["NAME_PREFIX"]+"_miRNA.mature.fa")
     stemloopname = os.path.join(dict_option["OUTFOLDER"],dict_option["NAME_PREFIX"]+"_miRNA.precursor.fa")
     ssname = os.path.join(dict_option["OUTFOLDER"],dict_option["NAME_PREFIX"]+"_miRNA.precursor.ss")
+
+    write_formatted_string_withtime("The output files are in " + dict_option["OUTFOLDER"], 30, sys.stdout)
     if logger:
+        logger.info("The output files are in " + dict_option["OUTFOLDER"])
         logger.info("Generating a gff file contains all predictions. GFF file name: " + gffname)
     gen_gff_from_result(result,gffname)
     if logger:
@@ -3174,18 +3177,21 @@ if __name__ == '__main__':
     samgood = run_check_sam_format(dict_option)
     if not allgood or not samgood:
         exit(-1)
-    sys.stdout.write("\n\n")
+    sys.stdout.write("\n")
 
     fasta_good = run_check_fasta_format(dict_option)
     if not fasta_good:
         exit(-1)
 
-    sys.stdout.write("\n\n")
+    sys.stdout.write("\n")
     if os.path.exists(dict_option["GFF_FILE"]):
         gff_good = run_check_gff(dict_option)
         if not gff_good:
             exit(-1)
+    else:
+        write_formatted_string_withtime("No GFF file.", 30, sys.stdout)
 
+    sys.stdout.write("\n")
     logger = None
     if dict_option['LOG']:
         logger = logging.getLogger(__name__)

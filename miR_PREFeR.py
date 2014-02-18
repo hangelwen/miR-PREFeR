@@ -2043,7 +2043,7 @@ def check_loci(structures, matures, region, dict_aln, which):
     for m0, m1, strand, mdepth in matures:
         # TODO Move this if to previous stage.
         # if mature length is not in [18-24], then ignore this
-        if m1-m0 <18 or m1-m0>24:
+        if m1-m0 <18 or m1-m0>23:
             continue
         lowest_energy = 0
         lowest_energy = 0

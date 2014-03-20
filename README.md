@@ -166,7 +166,7 @@ The miR\_PREFeR.py script takes a configuration file as input. The configuration
 3. ALIGNMENT_FILE: The path of the RNAseq alignment files in SAM format. Absolute path preferred.
 4. GFF_FILE: The path of the optional GFF file. Absolute path preferred.
 5. PRECURSOR_LEN: The max length of a miRNA precursor. The default is 300
-6. READS_DEPTH\_CUTOFF: The first step of the pipeline is to identify candidate regions of the miRNA loci. If READS\_DEPTH\_CUTOFF = N, then genomic position that the mapped depth is smaller than N is not considered. Default value is 20.
+6. READS_DEPTH\_CUTOFF: The first step of the pipeline is to identify candidate regions of the miRNA loci. If READS\_DEPTH\_CUTOFF = N, then genomic position that the mapped depth is smaller than N is not considered. Default value is 10.
 7. NUM\_OF\_CORE: Number of CPUS/Cores avalible for this computation. If commented out or leave blank, 1 is used.
 8. OUTFOLDER: Outputfolder. If not specified, use the current working directory.
 9. NAME\_PREFIX: Prefix for naming the output files. For portability, please DO NOT contain any spaces and special characters. The prefered includes 'A-Z', 'a-z', '0-9', and underscore '_'.

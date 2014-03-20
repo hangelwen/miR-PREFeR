@@ -194,7 +194,7 @@ TTTGAACGCAAGTTGCGCCCCAA
 <li>ALIGNMENT_FILE: The path of the RNAseq alignment files in SAM format. Absolute path preferred.</li>
 <li>GFF_FILE: The path of the optional GFF file. Absolute path preferred.</li>
 <li>PRECURSOR_LEN: The max length of a miRNA precursor. The default is 300</li>
-<li>READS_DEPTH_CUTOFF: The first step of the pipeline is to identify candidate regions of the miRNA loci. If READS_DEPTH_CUTOFF = N, then genomic position that the mapped depth is smaller than N is not considered. Default value is 20.</li>
+<li>READS_DEPTH_CUTOFF: The first step of the pipeline is to identify candidate regions of the miRNA loci. If READS_DEPTH_CUTOFF = N, then genomic position that the mapped depth is smaller than N is not considered. Default value is 10.</li>
 <li>NUM_OF_CORE: Number of CPUS/Cores avalible for this computation. If commented out or leave blank, 1 is used.</li>
 <li>OUTFOLDER: Outputfolder. If not specified, use the current working directory.</li>
 <li>NAME_PREFIX: Prefix for naming the output files. For portability, please DO NOT contain any spaces and special characters. The prefered includes 'A-Z', 'a-z', '0-9', and underscore '_'.</li>

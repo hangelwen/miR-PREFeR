@@ -47,11 +47,12 @@ def parse_option():
     dict_option['ACTION'] = action
     return dict_option
 
+
 def parse_option_optparse():
     from optparse import OptionParser
     helpstr = """python mir_PREFeR.py [options] command configfile
 
-command could be one of the following:
+    command could be one of the following:
     check = Check the dependency and the config file only (default).
     prepare = Prepare data.
     candidate = Generate candidate regions.
@@ -89,7 +90,7 @@ def parse_configfile(configfile):
         "ALIGNMENT_FILE":[],
         "GFF_FILE":"",
         "PRECURSOR_LEN":300,
-        "READS_DEPTH_CUTOFF":20,
+        "READS_DEPTH_CUTOFF":10,
         "MAX_GAP":100,
         "NUM_OF_CORE":1,
         "OUTFOLDER":"./",
@@ -245,9 +246,7 @@ def check_gff(gffname):
     The return value is a tuple with two elements. The first one is True/False.
     if True, the second is a set containing all the IDs of the sequences; if
     False, the second is a error message.
-
     '''
-
 
     set_ids = set()
     good_count = 0
@@ -305,7 +304,6 @@ def check_reference(refname):
     2.  There is no black lines in between the sequence line of each entry.
     3.  Each sequence line of the same entry is of fixed length, except the last
     line of each entry.
-
     '''
 
     command = "samtools faidx " + refname
@@ -334,7 +332,6 @@ def check_reference(refname):
     return (True, dict_refID)
 
 
-
 def check_sam_format(samname):
     '''
     This function does the following:
@@ -357,7 +354,6 @@ def check_sam_format(samname):
         return False
 
     pattern=r"^(\S+)_r[0-9]+_x([0-9]+)$"
-
     has_header = False
     seqid_right = True
     flag_right = True
@@ -367,7 +363,7 @@ def check_sam_format(samname):
         line = f.readline()
         if line.startswith("@"):
             has_header = True
-        for line in f:
+        for idx, line in enumerate(f):
             if line.startswith("@"):
                 continue
             else:
@@ -382,6 +378,7 @@ def check_sam_format(samname):
                     if m.groups()[0] == samplename:
                         continue
                     else:
+                        write_formatted_string("ERROR: ReadID not right on line " + str(idx+1) + ", ReadID=" +sp[0] + ", samplename=" + samplename , 30, sys.stderr)
                         seqid_right = False
                 else:  # seqid wrong
                     seqid_right = False
@@ -2040,6 +2037,7 @@ def check_expression(ss, dict_extendregion_info, maturepos_genome, mature_depth,
 
 def check_loci(structures, matures, region, dict_aln, which):
     miRNAs = []
+    #import pdb; pdb.set_trace();
     for m0, m1, strand, mdepth in matures:
         # TODO Move this if to previous stage.
         # if mature length is not in [18-24], then ignore this
@@ -2087,7 +2085,6 @@ def filter_next_loci(alndumpname, rnalfoldoutname, minlen=50):
     list_miRNA_loci = []
     alnf = open(alndumpname)
     ss_generator = get_structures_next_extendregion(rnalfoldoutname, minlen)
-
     while True:
         region = None
         which = None

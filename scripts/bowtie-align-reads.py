@@ -73,7 +73,7 @@ def parse_option_optparse():
                       If your genome index files are in folder /user/home/index, with names TAIR10.1.ebwt, TAIR10.2.ebwt, etc, you must use -i /user/home/index/TAIR10 for the -i option.")
     parser.add_option("-t", "--temp", help="Temporary folder to hold the bowtie index files. If not supplied, the current directory is used. Only used with -r.")
     parser.add_option("-v", "--allowedmismatch", type=int, default=0, help="-v option in bowtie. Number of mismatches allowed. Default is 0.")
-    parser.add_option("-m", "--multialignment", type=int, default=30, help="-m option in bowtie.  Suppress all alignments if > <int> alignments exist. Default is 30.")
+    parser.add_option("-k", "--multialignment", type=int, default=20, help="-k option in bowtie.  Report up to <int> vaild alignment. Default is 20.")
     parser.add_option("-p", "--processor", type=int, default=1,
                       help="Use multiple threads to do alignment.")
     parser.add_option("-f", "--filterunmapped", action="store_true", help="Filter out unmapped alignments in the output.")
@@ -179,9 +179,9 @@ def run_bowtie_build(fastalist, tempfolder):
 
 def run_bowite(fastaname, outname, indexbase, options):
     #bowtie -a -v 0 -p 8 -m 30 -S bowtie-index/TAIR10  -f SAMPLE1.fasta.processed > SAMPLE1.sam 2> SMAPLE1.log
-    command = "bowtie -a -p " + str(options.processor)
+    command = "bowtie -p " + str(options.processor)
     command = command + " -v " + str(options.allowedmismatch)
-    command = command + " -m " + str(options.multialignment) + " -S "
+    command = command + " --best --strata -k " + str(options.multialignment) + " -S "
     command = command + indexbase + " " + " -f " + fastaname
     fout = open(outname, 'w')
     try:

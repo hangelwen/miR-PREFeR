@@ -50,6 +50,10 @@ Here I used the pre-compiled RNALfold as an example. If you can see usage inform
 Note that in the dependency/Mac/ folder there are several folders named after specific Mac OS X version. If you can find the same version as your own system, then use pre-compiled programs under that folder. Otherwise, try to use programs which were compiled with lower Mac OS X version number.
 
 
+### For Windows users ###
+
+The pipeline depends on Samtools, and a few Linux/Unix utilities such as `sort`. Windows users need to install a Linux environment emulator such as Cygwin (<http://cygwin.com/>), then install Samtools. Please follow instructions on the Cygwin website (<http://cygwin.com/install.html>) for more information.
+
 ## 2. Obtain and install the pipeline ##
 
 The miR-PREFeR pipeline is hosted on Github (https://github.com/hangelwen/miR-PREFeR). To obtain the program, open an terminal window and execute the following command:

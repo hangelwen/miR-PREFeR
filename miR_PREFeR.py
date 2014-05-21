@@ -2009,9 +2009,11 @@ def check_expression(ss, dict_extendregion_info, maturepos_genome, mature_depth,
     total_depth = 0
     star_depth = 0
     mature_isoform_depth = 0
+    all_depth = []
     for pos in dict_extendregion_info[0]:
         for s in dict_extendregion_info[0][pos]:
             total_depth += dict_extendregion_info[0][pos][s][0][-1]  # total depth on both strand?
+            all_depth.append(dict_extendregion_info[0][pos][s][0][-1])
     if starpos_genome[0] not in dict_extendregion_info[0]:
         star_depth = 0
     elif strand not in dict_extendregion_info[0][starpos_genome[0]]:
@@ -2032,7 +2034,7 @@ def check_expression(ss, dict_extendregion_info, maturepos_genome, mature_depth,
     ratio = (mature_depth+star_depth)/float(total_depth)
     ratio_matureisoform = (mature_isoform_depth)/float(total_depth)
     #print("T, M, S, R", total_depth, mature_depth, star_depth, ratio)
-    return star_depth, ratio, total_depth, ratio_matureisoform
+    return star_depth, ratio, total_depth, ratio_matureisoform, all_depth
 
 
 def check_loci(structures, matures, region, dict_aln, which):
@@ -2071,6 +2073,8 @@ def check_loci(structures, matures, region, dict_aln, which):
                             lowest_energy = energy
                     else:  #  no star expression
                         if exprinfo[3] >=0.8 and exprinfo[2] > 1000:  # but very high expression
+                            if min(exprinfo[4]) < 100:
+                                continue
                             #  The last 'False' means this is not an confident miRNA
                             outputinfo = [region[0], structinfo[2],
                                           structinfo[3], m0, m1, structinfo[0],

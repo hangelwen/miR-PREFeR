@@ -312,7 +312,7 @@ def check_reference(refname):
     except subprocess.CalledProcessError:
         return (False, 0)
 
-    idpattern = r'^>\s*([-_a-zA-Z0-9]+)\s*.+$'
+    idpattern = r'^>\s*([-_a-zA-Z0-9]+)\s*.*$'
     dict_refID = {}
     with open(refname) as f:
         refID = ""
@@ -321,6 +321,7 @@ def check_reference(refname):
                 m = re.match(idpattern, line.rstrip())
                 if m:
                     refID = m.groups()[0]
+                    print(refID)
                     if refID in dict_refID:  #duplicate ID
                         return (False, "More than one sequence have the same sequence ID: " + refID)
                     else:

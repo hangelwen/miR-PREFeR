@@ -52,11 +52,11 @@ def parse_option_optparse():
     python bowtie-align-reads.py [options] <read fasta1> ... <read fastaN>
 
     Example:
-    python bowtie-align-reads.py -p 2 -m 20 -f -r TAIR10.fa SAMPLE1.fa.processed
+    python bowtie-align-reads.py -p 2 -k 20 -f -r TAIR10.fa SAMPLE1.fa.processed
 
     This command maps reads in SAMPLE1.fa.processed to TAIR10.fa using two
     threads (-p). Reads that mapped to more than 20 positions are not
-    reported (-m). Unmapped alignments are filtered using SAMtools (-f).
+    reported (-k). Unmapped alignments are filtered using SAMtools (-f).
 
     To see the available options, using:
     python bowtie-align-reads.py -h

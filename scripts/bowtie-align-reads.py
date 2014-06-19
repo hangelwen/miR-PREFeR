@@ -56,7 +56,9 @@ def parse_option_optparse():
 
     This command maps reads in SAMPLE1.fa.processed to TAIR10.fa using two
     threads (-p). Reads that mapped to more than 20 positions are not
-    reported (-k). Unmapped alignments are filtered using SAMtools (-f).
+    reported (-k). Unmapped alignments are filtered using SAMtools (-f), this
+    will reduce the size of the SAM file and can speed up the running time
+    of miR-PREFeR, so it's recommended.
 
     To see the available options, using:
     python bowtie-align-reads.py -h
@@ -183,6 +185,7 @@ def run_bowite(fastaname, outname, indexbase, options):
     command = command + " -v " + str(options.allowedmismatch)
     command = command + " --best --strata -k " + str(options.multialignment) + " -S "
     command = command + indexbase + " " + " -f " + fastaname
+    print("SAM file: " + outname)
     fout = open(outname, 'w')
     try:
         sys.stdout.write("\nMapping file " + fastaname + ", command:\n")
@@ -196,7 +199,7 @@ def run_bowite(fastaname, outname, indexbase, options):
 
 
 def filter_unmapped_alignment(samname, newsamname):
-    command = "samtools view -Sh -F 4 " + samname + " -o " + newsamname
+    command = "samtools view -Sh -F 4 -o " + newsamname + " " + samname
     try:
         sys.stdout.write("\nFiltering unmapped alignments, command:\n")
         sys.stdout.write(command+"\n")

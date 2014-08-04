@@ -43,6 +43,14 @@ If successful, you should see an executable program named "samtools" in the same
 
 ### For Mac OS users ###
 
+#### a. Homebrew users ####
+Homebrew  <https://github.com/Homebrew/homebrew> is a fantastic package manager for MacOS. If you use Homebrew to manage your package on your Mac, mir-prefer and all it's dependencies can be installed simply by the following command
+
+    brew mir-prefer
+
+Instructions on how to install and use homebrew can be found at <http://coolestguidesontheplanet.com/setting-up-os-x-mavericks-and-homebrew/>.
+
+#### b. Other Mac  users ####
 Since it maybe difficult for some Mac OS users to successfully compile C/C++ programs, we provide several pre-compiled versions of samtools and RNALfold, which are put in the dependency/Mac/ folder. Mac OS users can first try to use the pre-compiled programs. If they do not work (This is possible), then try to compile from the source code by following the instructions in this section. To test whether a pre-compiled program works on your machine, change directory to the folder that contains the program, and then:
 
     chmod +x RNALfold

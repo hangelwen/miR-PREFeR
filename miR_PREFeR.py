@@ -298,7 +298,7 @@ def check_reference(refname):
     of an entry have the same length except the last line, all sequence ID
     lines do not contain white space. So we check the following:
     1.  The ID of each sequence is unique. Each ID line starts with ">". The ID
-    should only contain 0-9, a-Z, underscore(_), and dash(-). Everything after
+    should no white space characters. Everything after
     the first blank character is ignored(ID only count to the first non-blank
     character).
     2.  There is no black lines in between the sequence line of each entry.
@@ -312,7 +312,8 @@ def check_reference(refname):
     except subprocess.CalledProcessError:
         return (False, 0)
 
-    idpattern = r'^>\s*([-_a-zA-Z0-9]+)\s*.*$'
+    # idpattern = r'^>\s*([-_a-zA-Z0-9]+)\s*.*$'
+    idpattern = r'^>\s*(\S+)\s*.*$'
     dict_refID = {}
     with open(refname) as f:
         refID = ""

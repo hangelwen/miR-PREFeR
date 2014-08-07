@@ -88,7 +88,8 @@ def parse_configfile(configfile):
         "CONFIG_FILE":configfile,
         "FASTA_FILE":"",
         "ALIGNMENT_FILE":[],
-        "GFF_FILE":"",
+        "GFF_FILE_EXCLUDE": "",
+        "GFF_FILE_INCLUDE": "",
         "PRECURSOR_LEN":300,
         "READS_DEPTH_CUTOFF":10,
         "MAX_GAP":100,
@@ -117,7 +118,7 @@ def parse_configfile(configfile):
                             sys.exit(-1)
                         dict_option[key].append(os.path.expanduser(name.strip()))
                     continue
-                if key == "GFF_FILE" or key == "FASTA_FILE":
+                if key == "GFF_FILE_EXCLUDE" or key = "GFF_FILE_INCLUDE" or key == "FASTA_FILE":
                     if not os.path.exists(os.path.expanduser(sp[1].strip())):
                         sys.stderr.write("File " + sp[1].strip() +
                                           " does not exist!!\n")
@@ -159,6 +160,9 @@ def parse_configfile(configfile):
         allgood = False
     if dict_option["CHECKPOINT_SIZE"] < 10:
         sys.stderr.write("Error: CHECKPOINT_SIZE should >=10.\n")
+        allgood = False
+    if dict_option['GFF_FILE_INCLUDE'] and dict_option['GFF_FILE_EXCLUDE']:
+        sys.stderr.write("Error: GFF_FILE_EXCLUDE and GFF_FILE_INCLUDE are mutual exclusive, please remove one of them.\n")
         allgood = False
     if not allgood:
         exit(-1)
@@ -519,14 +523,16 @@ def gen_temp_gff(gffname, tmpdir):
     fout.close()
     return tempgffname
 
-def gen_keep_regions_from_gff(gffname, tmpdir, dict_len, minlen):
+
+def gen_keep_regions_from_exclude_gff(gffname, tmpdir, dict_len, minlen):
     '''
     Generate a BED format file which contains all the regions that are not
     overlap with the regions of the features in the gff file.
 
-    Note that gff file is 0 based, and the ending position is inclusive. BED
-    file is 1 based, and the ending position is exclusive.
+    Note that gff file is 1 based, and the ending position is inclusive.
+    BED file is 0 based, and the ending position is exclusive.
     '''
+
     def overlap(r1, r2):
         '''
         If r1 and r2 overlaps, return the combined region, else, return None.
@@ -570,9 +576,9 @@ def gen_keep_regions_from_gff(gffname, tmpdir, dict_len, minlen):
             if cur_seqid != seqid:
                 if seqid != "NOTKNOW":
                     if dict_len[seqid] - region[1] >= minlen:
-                        foutput.write(seqid+"\t"+str(region[1]+1)+"\t"+str(dict_len[seqid])+"\n")
+                        foutput.write(seqid+"\t"+str(region[1]-1)+"\t"+str(dict_len[seqid])+"\n")
                 if int(sp[3]) >=minlen:
-                    foutput.write(cur_seqid+"\t1"+"\t"+sp[3]+"\n")
+                    foutput.write(cur_seqid+"\t0"+"\t"+sp[3]+"\n")
                 seqid = cur_seqid
                 region = (int(sp[3]), int(sp[4]))
             else:
@@ -581,14 +587,54 @@ def gen_keep_regions_from_gff(gffname, tmpdir, dict_len, minlen):
                     region = ret
                 else:
                     if int(sp[3])-region[1] >=minlen:
-                        foutput.write(cur_seqid+"\t"+str(region[1]+1)+"\t"+sp[3]+"\n")
+                        foutput.write(cur_seqid+"\t"+str(region[1]-1)+"\t"+sp[3]+"\n")
                     region = (int(sp[3]), int(sp[4]))
                     seqid = cur_seqid
             #write the last one
         if dict_len[seqid] - region[1] >= minlen:
-            foutput.write(seqid+"\t"+str(region[1]+1)+"\t"+str(dict_len[seqid])+"\n")
+            foutput.write(seqid+"\t"+str(region[1]-1)+"\t"+str(dict_len[seqid])+"\n")
         foutput.close()
     return tempbedname
+
+
+def gen_keep_regions_from_include_gff(gffname, tmpdir, minlen):
+    '''
+    Generate a BED format file which contains all the regions that are
+    overlap with the regions of the features in the gff file.
+
+    Note that gff file is 0 based, and the ending position is inclusive. BED
+    file is 1 based, and the ending position is exclusive.
+    '''
+    tempgffunsortname = gen_temp_gff(gffname, tmpdir)
+    #sort the gff file
+    tempgffname = os.path.join(tmpdir, "temp.remove.gff")
+    tempbedname = os.path.join(tmpdir, "temp.keepregion.bed")
+    command = "sort -k1,1 -k4,4n " + tempgffunsortname + " -o " + tempgffname
+    try:
+        p = subprocess.Popen(command.split())
+        while True:
+            retcode = p.poll()
+            if retcode is None:
+                write_formatted_string_withtime("Sorting GFF file.", 30, sys.stdout)
+                time.sleep(10)
+            else:
+                write_formatted_string_withtime("GFF file sorting done.", 30, sys.stdout)
+                break
+    except Exception as e:
+        sys.stderr.write("Error occurred when sorting the GFF file.\n")
+        sys.stderr.write("Exception message: " + str(e) + "\n")
+        sys.exit(-1)
+    foutput = open(tempbedname, 'w')
+    with open(tempgffname) as f:
+        for line in f:
+            if line.startswith("#"):
+                continue
+            sp = line.split()
+            if int(sp[4])-int(sp[3]) >=minlen:
+                foutput.write(sp[0]+"\t"+str(sp[3]-1)+"\t"+sp[4]+"\n")
+        foutput.close()
+    return tempbedname
+
 
 
 def sam2bam(samfile, bamfile):
@@ -751,13 +797,13 @@ def prepare_data(dict_option, outtempfolder, logger):
         shutil.copyfile(bamfiles[0], combinedbamname)
 
     #removing reads that are overlapped with features in the gff file, if provided.
-    if os.path.exists(dict_option["GFF_FILE"]):
+    if os.path.exists(dict_option["GFF_FILE_EXCLUDE"]):
         #TODO: minlen should be user adjustable, not fix here.
         write_formatted_string_withtime("Removing reads that are overlapped with features in the GFF file.", 30, sys.stdout)
         if logger:
             logger.info("Removing reads that are overlapped with features in the GFF file.")
 
-        tempkeepregion = gen_keep_regions_from_gff(dict_option["GFF_FILE"], outtempfolder, dict_len, 55)
+        tempkeepregion = gen_keep_regions_from_exclude_gff(dict_option["GFF_FILE_EXCLUDE"], outtempfolder, dict_len, 55)
         num_lines = 0
         with open(tempkeepregion) as f:
             for line in f:
@@ -771,6 +817,26 @@ def prepare_data(dict_option, outtempfolder, logger):
             exit(-1)
 
         combinedbamname = gen_keep_regions_sort_bam(combinedbamname, tempkeepregion, os.path.join(outtempfolder,"combined.filtered"))
+    elif os.path.exists(dict_option["GFF_FILE_INCLUDE"]):
+        write_formatted_string_withtime("GFF_FILE_INCLUDE specified, removing reads that are not overlap with features in the GFF file.", 30, sys.stdout)
+        if logger:
+            logger.info("GFF_FILE_INCLUDE specified, removing reads that are not overlap with features in the GFF file.")
+
+        tempkeepregion = gen_keep_regions_from_include_gff(dict_option["GFF_FILE_INCLUDE"], outtempfolder,  55)
+        num_lines = 0
+        with open(tempkeepregion) as f:
+            for line in f:
+                num_lines += 1
+                if num_lines > 5:
+                    break
+        if num_lines==0:
+            write_formatted_string_withtime("!!! No regions in the GFF_FILE_INCLUDE file or all regions are shorter than 55, stop analyze!", 30, sys.stdout)
+            if logger:
+                logger.info("!!! No regions in the GFF_FILE_INCLUDE file or all regions are shorter than 55, stop analyze!")
+            exit(-1)
+
+        combinedbamname = gen_keep_regions_sort_bam(combinedbamname, tempkeepregion, os.path.join(outtempfolder,"combined.filtered"))
+
     else:
         combinedbamname = sort_index_bam(combinedbamname, os.path.join(outtempfolder,"combined.filtered"))
 
@@ -2745,12 +2811,12 @@ def run_check_fasta_format(dict_option):
             write_formatted_string("!!! " + ret[1], 30, sys.stdout)
         return False
 
-def run_check_gff(dict_option):
+def run_check_gff(gffname):
     write_formatted_string_withtime("Checking the format of the GFF file.", 30, sys.stdout)
-    gffsize = os.path.getsize(dict_option["GFF_FILE"])/1024/1024
+    gffsize = os.path.getsize(gffname)/1024/1024
     if gffsize > 50:
         write_formatted_string_withtime("!!! Warning: large GFF file size: " + str(gffsize) + "MB. Make sure the GFF file only contains regions that need to be excluded from miRNA prediction.", 30, sys.stdout)
-    ret = check_gff(dict_option["GFF_FILE"])
+    ret = check_gff(gffname)
     if ret[0]:
         write_formatted_string("*** GFF file OK.\n", 30, sys.stdout)
         return True
@@ -2804,8 +2870,11 @@ def run_check(dict_option, outtempfolder, recovername):
 
     run_check_fasta_format(dict_option)
 
-    if os.path.exists(dict_option["GFF_FILE"]):
-        run_check_gff(dict_option)
+    if os.path.exists(dict_option["GFF_FILE_EXCLUDE"]):
+        run_check_gff(dict_option["GFF_FILE_EXCLUDE"])
+
+    if os.path.exists(dict_option["GFF_FILE_INCLUDE"]):
+        run_check_gff(dict_option["GFF_FILE_INCLUDE"])
 
     last_stage = detect_stage_last_finished(recovername)
     if last_stage == "fold":
@@ -3186,8 +3255,12 @@ if __name__ == '__main__':
         exit(-1)
 
     sys.stdout.write("\n")
-    if os.path.exists(dict_option["GFF_FILE"]):
-        gff_good = run_check_gff(dict_option)
+    if os.path.exists(dict_option["GFF_FILE_EXCLUDE"]):
+        gff_good = run_check_gff(dict_option["GFF_FILE_EXCLUDE"])
+        if not gff_good:
+            exit(-1)
+    elif os.path.exists(dict_option["GFF_FILE_INCLUDE"]):
+        gff_good = run_check_gff(dict_option["GFF_FILE_INCLUDE"])
         if not gff_good:
             exit(-1)
     else:

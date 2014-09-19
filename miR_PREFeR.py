@@ -118,7 +118,7 @@ def parse_configfile(configfile):
                             sys.exit(-1)
                         dict_option[key].append(os.path.expanduser(name.strip()))
                     continue
-                if key == "GFF_FILE_EXCLUDE" or key = "GFF_FILE_INCLUDE" or key == "FASTA_FILE":
+                if key == "GFF_FILE_EXCLUDE" or key == "GFF_FILE_INCLUDE" or key == "FASTA_FILE":
                     if not os.path.exists(os.path.expanduser(sp[1].strip())):
                         sys.stderr.write("File " + sp[1].strip() +
                                           " does not exist!!\n")

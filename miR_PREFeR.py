@@ -22,6 +22,25 @@ dict_failure_reasons = {1: "Structure is not stemloop",
                        5: "Expression pattern not good"
 }
 
+
+class FailureReason(object):
+    NO_STEM_LOOP = "No stem-loop structures."
+    TOO_MANY_BULGE_OR_LOOP = "Mature-star duplex has too many bugles/interior loops."
+    MAX_BULGE_LARGE_THAN_2 = "Mature-star duplex has bulges whose size is larger than 2."
+    NUM_BULGE_MORE_THAN_2 = 'The number of bulges is larger than 2.'
+    TOTAL_LOOP_SIZE_LARGER_THAN_5 = "Total loop size is larger than 5."
+    NO_STAR_EXPRESSION_LOW_MATURE_EXPRESSION_IN_SOME_SAMPLE = "Star sequence not expression in the RNA-seq data, and at least one sample have less than 100 reads mapped to the mature region."
+    NO_STAR_EXPRESSION_NOT_GOOD_PATTERN = "No star expression and the expression pattern is not good."
+    EXPRESSION_PATTERN_NOT_GOOD = "Expression pattern not good."
+    MATURE_SIZE_OUT_RANGE = "The sizes of all identified mature sequences are out of region [18, 23]."
+    MATURE_NOT_IN_FOLD_REGION = "Mature is out of the local fold region."
+    MATURE_MATCH_SMALL_THAN_14 = "The number of base pairs in the mature-star duplex is smaller than 14."
+    MATURE_STAR_OVERLAP = "Mature and star overlap."
+    STAR_OUT_OF_FOLD_REGION = "The star sequence is out of the local fold region."
+    STAR_NOT_IN_ONE_ARM = "The star sequence is not in one arm of the stem loop."
+    FEW_READS_MAPPED_TO_DUPLEX = "The number of reads mapped to the mature and star sequence is smaller than 20%."
+
+
 def parse_option():
     import argparse
     helpstr = """    check = Check the dependency and the config file only (default).
@@ -1916,7 +1935,7 @@ def stat_duplex(mature, star):
 def pass_stat_duplex(loops, bulges):
     total = len(loops) + len(bulges)
     if total > 5:
-        return False
+        return ["FAIL_STRUCTURE_TOO_MANY_BULGE_OR_LOOP", False]
     num_loop_bigger_than_three = 0
     num_bulge_bigger_than_three = 0
     totalloopsize = 0
@@ -1933,12 +1952,12 @@ def pass_stat_duplex(loops, bulges):
     #if num_loop_bigger_than_three >1 or num_bulge_bigger_than_three >0:
     #    return False
     if max_bulge >2:  # maxmium bulge size is bigger than 2
-        return False
+        return ["FAIL_STRUCTURE_MAX_BULGE_LARGE_THAN_2", False]
     if totalloopsize >5:  # total loop size bigger than 5. >=5???
-        return False
+        return ["FAIL_STRUCTURE_TOTAL_LOOP_SIZE_LARGER_THAN_5", False]
     if len(bulges) > 2:  #number of bulges is bigger than 2
-        return False
-    return True
+        return ["FAIL_STRUCTURE_NUM_BULGE_MORE_THAN_2", False]
+    return [None, True]
 
 
 def get_maturestar_info(ss, mature, foldstart, foldend, regionstart, regionend,
@@ -1957,7 +1976,7 @@ def get_maturestar_info(ss, mature, foldstart, foldend, regionstart, regionend,
             stack.append(idx)
         if char == ")":
             if len(stack) == 0:
-                return None
+                return "FAIL_STRUCTURE_MATCHED_BASES"
             dict_bp[idx] = stack[-1]
             dict_bp[stack[-1]] = idx
             stack.pop()
@@ -1971,15 +1990,15 @@ def get_maturestar_info(ss, mature, foldstart, foldend, regionstart, regionend,
                                           foldend)
     # mature not in the fold region
     if not (mature[0]>=foldregion_genome[0] and mature[1]<=foldregion_genome[1]):
-        return None
+        return "FAIL_STRUCTURE_MATURE_NOT_IN_FOLD_REGION"
 
     mature_ss = ss[mature_local_pos[0]:mature_local_pos[1]]
     #  Not in a arm of a stem, return None. This should not happen given
     #  that the mature is already in an arm of a stem.
     if mature_ss.find("(")!=-1 and mature_ss.find(")")!=-1:
-        return None
+        return "FAIL_STRUCTURE_MATURE_NOT_IN_FOLD_REGION"
     if len(mature_ss) - mature_ss.count(".") <14:
-        return None
+        return "FAIL_STRUCTURE_MATURE_MATCH_SMALL_THAN_14"
 
 
     #  local positions
@@ -1997,7 +2016,7 @@ def get_maturestar_info(ss, mature, foldstart, foldend, regionstart, regionend,
         prime5 = False
         mature_sym = ")"
     if firstbp == -1:  # all are dots
-        return None
+        return "FAIL_STRUCTURE_MATURE_MATCH_SMALL_THAN_14"
 
     start_unpaired_len = mature_local_pos[1]-1-lastbp
     end_unpaired_len = firstbp-mature_local_pos[0]
@@ -2007,14 +2026,16 @@ def get_maturestar_info(ss, mature, foldstart, foldend, regionstart, regionend,
     #mature and star could overlap...
     if mature_local_pos[0] <= star_start:
         if star_start - mature_local_pos[1] < 3:
-            return None
+            return "FAIL_STRUCTURE_MATURE_STAR_OVERLAP"
         if star_end > len(ss):
-            return None
+            return "FAIL_STRUCTURE_STAR_OUT_OF_FOLD_REGION"
+
     if star_start <= mature_local_pos[0]:
         if mature_local_pos[0] - star_end<3:
-            return None
+            return "FAIL_STRUCTURE_MATURE_STAR_OVERLAP"
         if star_start < 0:
-            return None
+            return "FAIL_STRUCTURE_STAR_OUT_OF_FOLD_REGION"
+
     mend = ss.rfind(mature_sym, mature_local_pos[0], mature_local_pos[1]-2)
     sstart = dict_bp[mend]
     send = dict_bp[firstbp]
@@ -2024,7 +2045,7 @@ def get_maturestar_info(ss, mature, foldstart, foldend, regionstart, regionend,
     total_dots = mature_duplex.count(".") + star_duplex.count(".")
     total_bps = len(mature_duplex) - mature_duplex.count(".")
     if total_bps<14:
-        return None
+        return "FAIL_STRUCTURE_MATURE_MATCH_SMALL_THAN_14"
 
     # if prime5:  # the mature is on 5' arm
     #     print("5PRIME")
@@ -2041,10 +2062,11 @@ def get_maturestar_info(ss, mature, foldstart, foldend, regionstart, regionend,
     #     star_end = dict_bp[firstbp] + end_unpaired_len + 2 + 1
     star_ss = ss[star_start: star_end]
     if star_ss.find("(") != -1 and star_ss.find(")")!= -1:  # this could happen if the input ss in not a stem loop
-        return None
+        return "FAIL_STRUCTURE_STAR_NOT_IN_ONE_ARM"
     loops, bulges = stat_duplex(mature_duplex, star_duplex)
-    if not pass_stat_duplex(loops, bulges):
-        return None
+    pass_stat = pass_stat_duplex(loops, bulges)
+    if not pass_stat[1]:
+        return pass_stat[0]
     # convert local positions to genome positions.
     genome_star_start, genome_star_end = pos_local_2_genome(star_start,
                                                              star_end,
@@ -2105,8 +2127,39 @@ def check_expression(ss, dict_extendregion_info, maturepos_genome, mature_depth,
 
 
 def check_loci(structures, matures, region, dict_aln, which):
+    # This function returns either the list 'miRNAs' or the
+    # dict 'dict_why_not_miRNA_reasons'
+
+
     miRNAs = []
+    # record the reason why a region is not predicted as a miRNA.
+    # Only the first reason is recorded. For example, it's possible that
+    # a region do not have stem-loop structure and not good expression pattern,
+    # in this case only NO_STEM_LOOP is recorded because we check this first.
+    dict_why_not_miRNA_reasons = {}
     #import pdb; pdb.set_trace();
+    key = tuple(region)
+    dict_why_not_miRNA_reasons[key] = {}
+    dict_why_not_miRNA_reasons[key]['PEAK_PASS_DEPTH'] = "PASSED"
+    # no stem loop structure found for this region
+    if not structures[1]:
+        dict_why_not_miRNA_reasons[key]['HAS_STEMLOOP_STRUCTURE'] = 'FAILED'
+        return dict_why_not_miRNA_reasons
+    else:
+        dict_why_not_miRNA_reasons[key]['HAS_STEMLOOP_STRUCTURE'] = 'PASSED'
+
+    num_matures = len(matures)
+    num_matures_out_region = 0
+    for m0, m1, strand, mdepth in matures:
+        if m1-m0 <18 or m1-m0>23:
+            num_matures_out_region += 1
+    # sizes of all matures are out of bounds
+    if num_matures_out_region == num_matures:
+        dict_why_not_miRNA_reasons[key]['HAS_MATURE_SIZE_IN_RANGE'] = 'FAILED'
+        return dict_why_not_miRNA_reasons
+    else:
+        dict_why_not_miRNA_reasons[key]['HAS_MATURE_SIZE_IN_RANGE'] = 'PASSED'
+
     for m0, m1, strand, mdepth in matures:
         # TODO Move this if to previous stage.
         # if mature length is not in [18-24], then ignore this
@@ -2115,22 +2168,29 @@ def check_loci(structures, matures, region, dict_aln, which):
         lowest_energy = 0
         lowest_energy = 0
         outputinfo = []
+
         for energy, foldstart, ss, sstype in structures[1]:
             if energy > lowest_energy:
                 continue
             else:
+                #key = (tuple(region), m0, m1, strand, mdepth, ss, sstype)
+                key1 = (m0, m1, strand, ss)
+                dict_why_not_miRNA_reasons[key][key1] = {}
                 structinfo = get_maturestar_info(ss, (m0,m1), foldstart,
                                                  foldstart+len(ss),
                                                  region[1][0],
                                                  region[1][1],
                                                  strand)
-                if structinfo:
+                if isinstance(structinfo, str): # failed
+                    dict_why_not_miRNA_reasons[key][key1][structinfo] = "FAILED"
+                else:
                     exprinfo = check_expression(ss,dict_aln, (m0,m1),
                                                 mdepth,
                                                 (structinfo[0],structinfo[1]),
                                                 strand)
                     if exprinfo[0]>0:  # has star expression
-                        if exprinfo[1] < 0.1:
+                        if exprinfo[1] < 0.2:
+                            dict_why_not_miRNA_reasons[key][key1]["FAIL_EXPRESS_PATTERN_TOO_FEW_READS_MAPPED_TO_DUPLEX"] = "FAILED"
                             continue
                         else:
                             #  The last 'True' means this is an confident miRNA
@@ -2141,15 +2201,21 @@ def check_loci(structures, matures, region, dict_aln, which):
                     else:  #  no star expression
                         if exprinfo[3] >=0.8 and exprinfo[2] > 1000:  # but very high expression
                             if min(exprinfo[4]) < 100:
+                                dict_why_not_miRNA_reasons[key][key1]["FAIL_EXPRESS_PATTERN_NO_STAR_EXPRESSION_LOW_MATURE_EXPRESSION_IN_SOME_SAMPLE"] = "FAILED"
                                 continue
                             #  The last 'False' means this is not an confident miRNA
                             outputinfo = [region[0], structinfo[2],
                                           structinfo[3], m0, m1, structinfo[0],
                                           structinfo[1], ss, strand, False]
                             lowest_energy = energy
+                        else:
+                            dict_why_not_miRNA_reasons[key][key1]['FAIL_EXPRESS_PATTERN_NO_STAR_EXPRESSION_NOT_GOOD_PATTERN'] = "FAILED"
         if outputinfo:  # the loci contains an miRNA
             miRNAs.append(outputinfo)
-    return miRNAs
+    if miRNAs:
+        return miRNAs
+    else:
+        return dict_why_not_miRNA_reasons
 
 
 def filter_next_loci(alndumpname, rnalfoldoutname, minlen=50):
@@ -2193,18 +2259,21 @@ def gen_miRNA_loci_nopredict(alndumpnames, rnalfoldoutnames, minlen, logger):
 
         mirnas = []
         for mir in mir_generator:
-            mirnas.append(mir)
+            if isinstance(mir, list):
+                mirnas.append((mir, True))
+            else:
+                mirnas.append((mir, False))
         queue.put(mirnas)
         queue.put("done")
         queue.close()
     miRNAqueue = multiprocessing.Queue()
     jobs = []
     finalresult = []
+    failed_reasons = []
     for i in range(len(alndumpnames)):
         p = multiprocessing.Process(target = gen_miRNA_loci_local, args=(miRNAqueue, alndumpnames[i], rnalfoldoutnames[i],minlen))
         p.start()
         jobs.append(p)
-
     num_joined = 0
     while True:
         try:
@@ -2217,13 +2286,48 @@ def gen_miRNA_loci_nopredict(alndumpnames, rnalfoldoutnames, minlen, logger):
                 num_joined += 1
             else:
                 for mirna in result:
-                    finalresult.append(mirna[0])
+                    if mirna[1]:
+                        finalresult.append(mirna[0][0])
+                    else:
+                        failed_reasons.append(mirna[0])
         except Queue.Empty:
             time.sleep(5)
             continue
 
-    return finalresult
 
+    return finalresult, failed_reasons
+
+
+def convert_failure_reasons_list(list_failure_reasons):
+    out_dict_reasons = {} # key is chromosome
+    for dict_reason in list_failure_reasons:
+        for key in dict_reason: # key is a tuple: ('Chr1', (21784879, 21785192), '-')
+            chrom = key[0]
+            if chrom not in out_dict_reasons:
+                out_dict_reasons[chrom] = {'+': {},
+                                           '-': {}}
+            strand = key[2]
+            out_dict_reasons[chrom][strand][key[1]] = dict_reason[key]
+    return out_dict_reasons
+
+
+def write_dict_reasons(dict_reasons, fname):
+    outf = open(fname, 'w')
+    for chrom in dict_reasons:  # key is chromosome
+        for strand in dict_reasons[chrom]:
+            for region in dict_reasons[chrom][strand]:
+                outf.write("===========================================================\n")
+                outf.write(chrom + "\t" + str(region[0]) + "\t" + str(region[1]) + "\t" + strand + "\n")
+                dict_region = dict_reasons[chrom][strand][region]
+                for key in dict_region:
+                    if isinstance(key, str):
+                        outf.write(key + ":" + dict_region[key] + "\n")
+                for key in dict_region:
+                    if isinstance(key, tuple):
+                        outf.write("MATURE region: {0}-{1}, SS: {2}".format(key[0], key[1], key[3]) + "\n")
+                        for v in dict_region[key]:
+                            outf.write(v + "\t" + dict_region[key][v] + "\n")
+                outf.write("\n")
 
 def get_mature_stemloop_star_seq(seqid, mstart, mend, start, end, sstart, send, fastaname):
     region1 = seqid+":"+str(mstart)+"-"+str(mend)
@@ -2246,6 +2350,24 @@ def get_mature_stemloop_star_seq(seqid, mstart, mend, start, end, sstart, send, 
         sys.stderr.write("Error occurred when calling samtools in get_mature_stemloop_star_seq.\n")
         sys.exit(-1)
     return region1, mature_seq, region2, stemloop_seq, region3, star_seq
+
+
+def get_mature_stemloop_seq(seqid, mstart, mend, start, end, fastaname):
+    region1 = seqid+":"+str(mstart)+"-"+str(mend)
+    region2 = seqid+":"+str(start)+"-"+str(end)
+    mature_command = "samtools faidx " + fastaname + " " +region1
+    stemloop_command = "samtools faidx " + fastaname + " " +region2
+    try:
+        samtools_process = subprocess.Popen(mature_command.split(), stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        outmessage, outerr = samtools_process.communicate()
+        mature_seq = str("".join(outmessage.decode().split("\n")[1:]))
+        samtools_process = subprocess.Popen(stemloop_command.split(), stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        outmessage, outerr = samtools_process.communicate()
+        stemloop_seq = str("".join(outmessage.decode().split("\n")[1:]))
+    except Exception as e:
+        sys.stderr.write("Error occurred when calling samtools in get_mature_stemloop_seq.\n")
+        sys.exit(-1)
+    return region1, mature_seq, region2, stemloop_seq
 
 
 def gen_gff_from_result(resultlist, gffname):
@@ -2931,6 +3053,13 @@ def get_samplename_from_sam(samname):
                 return samplename
 
 
+def write_failed_reason(dict_reasons, fname):
+    outf = open(fname, 'w')
+    for key in dict_reasons:
+        outf.write(str(key))
+        outf.write("\n")
+    outf.close()
+
 def run_prepare(dict_option, outtempfolder, recovername):
     logger = None
     if dict_option["LOG"]:
@@ -3126,7 +3255,7 @@ def run_predict(dict_option, outtempfolder, recovername):
     samplenames = cPickle.load(open(samplenamefilename))
 
     foldnames = dict_recover["finished_stages"]["fold"]["foldnames"]
-    result = gen_miRNA_loci_nopredict(dict_recover["finished_stages"]["candidate"]["infodump"],
+    result, failed_reasons = gen_miRNA_loci_nopredict(dict_recover["finished_stages"]["candidate"]["infodump"],
                                       foldnames, 55, logger)
     if len(result)==0:
         write_formatted_string_withtime("0 miRNA identified. No result files generated.", 30, sys.stdout)
@@ -3138,7 +3267,10 @@ def run_predict(dict_option, outtempfolder, recovername):
     maturename = os.path.join(dict_option["OUTFOLDER"],dict_option["NAME_PREFIX"]+"_miRNA.mature.fa")
     stemloopname = os.path.join(dict_option["OUTFOLDER"],dict_option["NAME_PREFIX"]+"_miRNA.precursor.fa")
     ssname = os.path.join(dict_option["OUTFOLDER"],dict_option["NAME_PREFIX"]+"_miRNA.precursor.ss")
-
+    failedname = os.path.join(dict_option["OUTFOLDER"],dict_option["NAME_PREFIX"]+"_reason_why_not_miRNA.txt")
+    if failed_reasons:
+        formatted_fail_reasons = convert_failure_reasons_list(failed_reasons)
+        write_dict_reasons(formatted_fail_reasons, failedname)
     write_formatted_string_withtime("The output files are in " + dict_option["OUTFOLDER"], 30, sys.stdout)
     if logger:
         logger.info("The output files are in " + dict_option["OUTFOLDER"])

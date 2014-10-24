@@ -1640,6 +1640,7 @@ def get_structures_next_extendregion(rnalfoldoutname, minlen,
     energypattern = re.compile(r'\(\s*(-?[0-9]+[\.]?[0-9]*)\s*\)')
     structures = []
     which = 0
+    peak = ''
     first = True
     sp=[]
     with open(rnalfoldoutname) as f:
@@ -1647,9 +1648,10 @@ def get_structures_next_extendregion(rnalfoldoutname, minlen,
             sp = line.strip().split()
             if line.startswith(">"):
                 if not first:
-                    yield (which, structures)
+                    yield (which, peak, structures)
                 structures = []
                 which = sp[3]  # 0, L, or R
+                peak = sp[2]
                 first = False
             else:
                 if len(sp) >=3:  # structure line
@@ -1683,7 +1685,7 @@ def get_structures_next_extendregion(rnalfoldoutname, minlen,
                         #         sstype = -1
                 else:
                     continue
-        yield (which, structures)
+        yield (which, peak, structures)
 
 
 def is_stem_loop(ss, minloopsize):
@@ -1996,7 +1998,7 @@ def get_maturestar_info(ss, mature, foldstart, foldend, regionstart, regionend,
     #  Not in a arm of a stem, return None. This should not happen given
     #  that the mature is already in an arm of a stem.
     if mature_ss.find("(")!=-1 and mature_ss.find(")")!=-1:
-        return "FAIL_STRUCTURE_MATURE_NOT_IN_FOLD_REGION"
+        return "FAIL_STRUCTURE_MATURE_NOT_IN_ONE_ARM"
     if len(mature_ss) - mature_ss.count(".") <14:
         return "FAIL_STRUCTURE_MATURE_MATCH_SMALL_THAN_14"
 
@@ -2191,6 +2193,9 @@ def check_loci(structures, matures, region, dict_aln, which):
                     if exprinfo[0]>0:  # has star expression
                         if exprinfo[1] < 0.2:
                             dict_why_not_miRNA_reasons[key][key1]["FAIL_EXPRESS_PATTERN_TOO_FEW_READS_MAPPED_TO_DUPLEX"] = "FAILED"
+                            dict_why_not_miRNA_reasons[key][key1]['ss_info'] = [region[0], structinfo[2],
+                                                                                structinfo[3], m0, m1, structinfo[0],
+                                                                                structinfo[1], ss, strand, True]
                             continue
                         else:
                             #  The last 'True' means this is an confident miRNA
@@ -2199,10 +2204,10 @@ def check_loci(structures, matures, region, dict_aln, which):
                                           structinfo[1], ss, strand, True]
                             lowest_energy = energy
                     else:  #  no star expression
-                        if exprinfo[3] >=0.8 and exprinfo[2] > 1000:  # but very high expression
-                            if min(exprinfo[4]) < 100:
-                                dict_why_not_miRNA_reasons[key][key1]["FAIL_EXPRESS_PATTERN_NO_STAR_EXPRESSION_LOW_MATURE_EXPRESSION_IN_SOME_SAMPLE"] = "FAILED"
-                                continue
+                        if exprinfo[3] >=0.8 and exprinfo[2] > 100:  # but very high expression
+                            #if min(exprinfo[4]) < 100:
+                            #    dict_why_not_miRNA_reasons[key][key1]["FAIL_EXPRESS_PATTERN_NO_STAR_EXPRESSION_LOW_MATURE_EXPRESSION_IN_SOME_SAMPLE"] = "FAILED"
+                            #    continue
                             #  The last 'False' means this is not an confident miRNA
                             outputinfo = [region[0], structinfo[2],
                                           structinfo[3], m0, m1, structinfo[0],
@@ -2210,6 +2215,9 @@ def check_loci(structures, matures, region, dict_aln, which):
                             lowest_energy = energy
                         else:
                             dict_why_not_miRNA_reasons[key][key1]['FAIL_EXPRESS_PATTERN_NO_STAR_EXPRESSION_NOT_GOOD_PATTERN'] = "FAILED"
+                            dict_why_not_miRNA_reasons[key][key1]['ss_info'] = [region[0], structinfo[2],
+                                                                                structinfo[3], m0, m1, structinfo[0],
+                                                                                structinfo[1], ss, strand, True]
         if outputinfo:  # the loci contains an miRNA
             miRNAs.append(outputinfo)
     if miRNAs:
@@ -2234,21 +2242,33 @@ def filter_next_loci(alndumpname, rnalfoldoutname, minlen=50):
         structures = []
         if which == "0": #only one extend region for this loci
             structures = next(ss_generator)
-            miRNAs = check_loci(structures, matures, region, dict_aln, which)
-            if miRNAs:
-                yield miRNAs
+            peak = structures[1]
+            which_and_ss = (structures[0], structures[2])
+            miRNAs = check_loci(which_and_ss, matures, region, dict_aln, which)
+            if isinstance(miRNAs, dict): # not a miRNA
+                miRNAs['which'] = '0'
+                miRNAs['peak'] = peak
+            yield miRNAs
             continue
+
         else:
             structuresL = next(ss_generator)  # L
             structuresR = next(ss_generator)  # R
+            peak = structuresL[1]
+            which_and_ssL = (structuresL[0], structuresL[2])
+            which_and_ssR = (structuresR[0], structuresR[2])
             region1, which1, dict_aln1, matures1 = cPickle.load(alnf)
-            miRNAsL = check_loci(structuresL, matures, region, dict_aln, which)
-            if miRNAsL:
-                yield miRNAsL
-            else:
-                miRNAsR = check_loci(structuresR, matures1, region1, dict_aln1, which1)
-                if miRNAsR:
-                    yield miRNAsR
+            miRNAsL = check_loci(which_and_ssL, matures, region, dict_aln, which)
+            if isinstance(miRNAsL, dict):
+                miRNAsL['which'] = 'L'
+                miRNAsL['peak'] = peak
+            yield miRNAsL
+            if isinstance(miRNAsL, dict):
+                miRNAsR = check_loci(which_and_ssR, matures1, region1, dict_aln1, which1)
+                if isinstance(miRNAsR, dict):
+                    miRNAsR['which'] = 'R'
+                    miRNAsR['peak'] = peak
+                yield miRNAsR
                 continue
 
 def gen_miRNA_loci_nopredict(alndumpnames, rnalfoldoutnames, minlen, logger):
@@ -2301,23 +2321,38 @@ def gen_miRNA_loci_nopredict(alndumpnames, rnalfoldoutnames, minlen, logger):
 def convert_failure_reasons_list(list_failure_reasons):
     out_dict_reasons = {} # key is chromosome
     for dict_reason in list_failure_reasons:
+        which = '0'
+        peak = ''
+        chrom = ''
+        strand = ''
+        region = ''
         for key in dict_reason: # key is a tuple: ('Chr1', (21784879, 21785192), '-')
+            if key == 'which':
+                which = dict_reason[key]
+                continue
+            if key == 'peak':
+                peak = dict_reason[key]
+                continue
             chrom = key[0]
             if chrom not in out_dict_reasons:
                 out_dict_reasons[chrom] = {'+': {},
                                            '-': {}}
             strand = key[2]
+            region = key[1]
             out_dict_reasons[chrom][strand][key[1]] = dict_reason[key]
+        out_dict_reasons[chrom][strand][region]['which'] = which
+        out_dict_reasons[chrom][strand][region]['peak'] = peak
     return out_dict_reasons
 
 
-def write_dict_reasons(dict_reasons, fname):
+def write_dict_reasons(dict_reasons, fname, fastaname, combinedsortedbamname, samplenames, outfolder):
+    list_not_pass_expression = []
     outf = open(fname, 'w')
     for chrom in dict_reasons:  # key is chromosome
         for strand in dict_reasons[chrom]:
             for region in dict_reasons[chrom][strand]:
                 outf.write("===========================================================\n")
-                outf.write(chrom + "\t" + str(region[0]) + "\t" + str(region[1]) + "\t" + strand + "\n")
+                outf.write(chrom + "\t" + str(region[0]) + "\t" + str(region[1]) + "\t" + strand + "\t" + dict_reasons[chrom][strand][region]['peak'] + "\t" + dict_reasons[chrom][strand][region]['which'] +"\n")
                 dict_region = dict_reasons[chrom][strand][region]
                 for key in dict_region:
                     if isinstance(key, str):
@@ -2326,8 +2361,14 @@ def write_dict_reasons(dict_reasons, fname):
                     if isinstance(key, tuple):
                         outf.write("MATURE region: {0}-{1}, SS: {2}".format(key[0], key[1], key[3]) + "\n")
                         for v in dict_region[key]:
-                            outf.write(v + "\t" + dict_region[key][v] + "\n")
+                            if isinstance(dict_region[key][v], str):
+                                outf.write(v + "\t" + dict_region[key][v] + "\n")
+                        if 'ss_info' in dict_region[key]:
+                            list_not_pass_expression.append(dict_region[key]['ss_info'])
                 outf.write("\n")
+    dict_not_mirna_info = gen_mirna_info(list_not_pass_expression, fastaname, combinedsortedbamname, samplenames)
+    gen_map_result(dict_not_mirna_info, outfolder)
+
 
 def get_mature_stemloop_star_seq(seqid, mstart, mend, start, end, sstart, send, fastaname):
     region1 = seqid+":"+str(mstart)+"-"+str(mend)
@@ -3269,8 +3310,16 @@ def run_predict(dict_option, outtempfolder, recovername):
     ssname = os.path.join(dict_option["OUTFOLDER"],dict_option["NAME_PREFIX"]+"_miRNA.precursor.ss")
     failedname = os.path.join(dict_option["OUTFOLDER"],dict_option["NAME_PREFIX"]+"_reason_why_not_miRNA.txt")
     if failed_reasons:
+        failedreadmappingfolder = os.path.join(dict_option['OUTFOLDER'],"failed_readmapping")
+        if not os.path.exists(failedreadmappingfolder):
+            os.mkdir(failedreadmappingfolder)
+
         formatted_fail_reasons = convert_failure_reasons_list(failed_reasons)
-        write_dict_reasons(formatted_fail_reasons, failedname)
+        write_dict_reasons(formatted_fail_reasons, failedname, dict_option["FASTA_FILE"],
+                           os.path.join(outtempfolder,
+                                        "combined.filtered.sort.bam"),
+                           samplenames, failedreadmappingfolder)
+
     write_formatted_string_withtime("The output files are in " + dict_option["OUTFOLDER"], 30, sys.stdout)
     if logger:
         logger.info("The output files are in " + dict_option["OUTFOLDER"])
@@ -3311,6 +3360,11 @@ def run_predict(dict_option, outtempfolder, recovername):
     resultlistname = os.path.join(outtempfolder,dict_option["NAME_PREFIX"]+"_miRNA.info.dump")
     resultfile = open(resultlistname,'w')
     cPickle.dump(result,resultfile)
+
+    dict_info_name = os.path.join(outtempfolder,dict_option["NAME_PREFIX"]+"_miRNA.dict.info.dump")
+    resultfile = open(dict_info_name,'w')
+    cPickle.dump(dict_mirna_info,resultfile)
+
 
     gen_mirna_fasta_ss_from_result(result, maturename, stemloopname, dict_option["FASTA_FILE"], ssname)
     if logger:

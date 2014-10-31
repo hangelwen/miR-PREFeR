@@ -211,13 +211,16 @@ TTTGAACGCAAGTTGCGCCCCAA
 <li>PIPELINE_PATH: The path of the miR-PREFeR pipeline.</li>
 <li>FASTA_FILE: The path of the genome sequences in fasta format. Absolute path preferred.</li>
 <li>ALIGNMENT_FILE: The path of the RNAseq alignment files in SAM format. Absolute path preferred.</li>
-<li>GFF_FILE: The path of the optional GFF file. Absolute path preferred.</li>
+<li>GFF file option. GFF_FILE_EXCLUDE: The path of the optional GFF file that contains regions you want to exclude from the miRNA analysis. GFF_FILE_INCLUDE: The path of the optional GFF file that contains regions you want to analysis. These two options are mutual exclusive thus only one of them can be specified.</li>
 <li>PRECURSOR_LEN: The max length of a miRNA precursor. The default is 300</li>
 <li>READS_DEPTH_CUTOFF: The first step of the pipeline is to identify candidate regions of the miRNA loci. If READS_DEPTH_CUTOFF = N, then genomic position that the mapped depth is smaller than N is not considered. Default value is 10.</li>
 <li>NUM_OF_CORE: Number of CPUS/Cores avalible for this computation. If commented out or leave blank, 1 is used.</li>
 <li>OUTFOLDER: Outputfolder. If not specified, use the current working directory.</li>
 <li>NAME_PREFIX: Prefix for naming the output files. For portability, please DO NOT contain any spaces and special characters. The prefered includes 'A-Z', 'a-z', '0-9', and underscore '_'.</li>
 <li>MAX_GAP: Maximum gap length between two contigs to form a candidate region. Default value is 100.</li>
+<li>MIN<em>MATURE_LEN and MAX_MATURE</em>LEN: the range of the mature length. The default values are 18 and 24, respectively.</li>
+<li>ALLOW_NO_STAR_EXPRESSION: If this is 'Y', then the criteria that requries the star sequence must be expressed (that is, there should be at least one read mapped to the star position.) is loosed if the expression pattern is good enough (.e.g. the majority of the reads mapped to the region are mapped to the mature position, and the expression patterns are consistent across different samples). The default value is Y.</li>
+<li>ALLOW_3NT_OVERHANG: In most cases, the mature star duplex has 2nt 3' overhangs. If this is set to 'Y', then 3nt overhangs are allowed. The default value is 'N'.</li>
 <li>CHECKPOINT_SIZE: The pipeline makes a checkpoint after each major step. In addition, because the folding stage is the most time consuming stage, it makes a checkpiont for each folding process after folding every CHECKPOINT_SIZE sequences. If the pipeline is killed for some reason in the middle of folding, it can be restarted using <code>recover</code> command from where it was stopped. The default value is 3000.</li>
 </ol>
 
@@ -250,6 +253,8 @@ TTTGAACGCAAGTTGCGCCCCAA
 <p><code>python miR_PREFeR.py -L recover configfile</code></p></li>
 </ol>
 
+<p><strong>Tips for running the pipeline:</strong> If you run the pipeline once and change the following configuration parameters and want to run it again, you do not need to run the pipeline from the start. You can just run the <code>predict</code> command. This saves you lots of time. These configuration parameters include: MIN_MATURE_LEN, MAX_MATURE_LEN, ALLOW_NO_STAR_EXPRESSION and ALLOW_3NT_OVERHANG.</p>
+
 <p><strong>NOTE on job recovery:</strong> To recover and continue a job, the intermediate output
   files in the temporary folder (See the Output section) should not be
   removed. All files needed to do recovery are in this folder.</p>
@@ -272,7 +277,9 @@ information in the table is the same as in the HTML file. This is provided
 for easier downstream processing/analysis.</li>
 <li>A list of read mapping result files in the folder <code>readmapping</code>. Each file
 corresponds to an miRNA and shows the reads mapped to the precursor region.</li>
-<li>A gff3 format annotation file that contains the predicted miRNAs.</li>
+<li>A gff3 format annotation file that contains the predicted miRNAs. The last column
+for each precursor contains information about whether the star sequence is expressed
+in the samples (star_expressed=y/n) and the overhang sizes (overhangsize=2:2).</li>
 <li>Two fasta files that contain the mature sequences and the precursor sequences
 of the predicted miRNAs.</li>
 <li>A <code>.ss</code> file that contains the sequence and the predicted structure of each

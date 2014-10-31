@@ -2666,17 +2666,17 @@ def gen_gff_from_result(resultlist, gffname):
     for idx, mirna in enumerate(resultlist):
         maturename = "miRNA_"+ str(idx)
         mirname = "miRNA-precursor_"+ str(idx)
-        has_star_expression = "star_expressed"
+        has_star_expression = "y"
         overhangsize = "2:2"
         if mirna[-1]['total_depth_star'] == 0 or ('max_imperfect_star' in mirna[-1] and mirna[-1]['max_imperfect_star'] == 0):
-            has_star_expression = 'no_star_expression'
+            has_star_expression = 'n'
 
         if 'max_imperfect_star' in mirna[-1] and mirna[-1]['max_imperfect_star'] != 0:
             if mirna[-1]['imperfect_star_which'] == 2:
                 overhangsize = "3:3"
             else:
                 overhangsize = "2:3"
-        other = has_star_expression + ";" + "overhangsize:" + overhangsize
+        other = 'mature_expressed=y;star_expressed=' + has_star_expression + ";" + "overhangsize=" + overhangsize
         write_gff_line(mirna[0],mirna[1],mirna[2]-1,mirna[-3],mirname, mirname,
                        feature="miRNA-precursor",other=other, fout=f)
         write_gff_line(mirna[0],mirna[3],mirna[4]-1,mirna[-3],maturename,

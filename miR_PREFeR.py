@@ -568,7 +568,7 @@ def gen_keep_regions_from_exclude_gff(gffname, tmpdir, dict_len, minlen):
             retcode = p.poll()
             if retcode is None:
                 write_formatted_string_withtime("Sorting GFF file.", 30, sys.stdout)
-                time.sleep(10)
+                time.sleep(5)
             else:
                 write_formatted_string_withtime("GFF file sorting done.", 30, sys.stdout)
                 break
@@ -631,7 +631,7 @@ def gen_keep_regions_from_include_gff(gffname, tmpdir, minlen):
             retcode = p.poll()
             if retcode is None:
                 write_formatted_string_withtime("Sorting GFF file.", 30, sys.stdout)
-                time.sleep(10)
+                time.sleep(5)
             else:
                 write_formatted_string_withtime("GFF file sorting done.", 30, sys.stdout)
                 break
@@ -2556,7 +2556,7 @@ def gen_miRNA_loci_nopredict(alndumpnames, rnalfoldoutnames, combinedsortedbamna
                     else:
                         failed_reasons.append(mirna[0])
         except Queue.Empty:
-            time.sleep(5)
+            time.sleep(2)
             continue
 
 

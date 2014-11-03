@@ -2245,6 +2245,7 @@ def check_expression_new(dict_map_info, samplenames, start,
     dict_info['mature_star_ratio_total'] = mature_star_ratio_tatal
     mature_star_ratio_tatal_both_strand =  float(total_depth_mature + max(total_depth_star, max_imperfect_star)) / (total_depth_just_this_strand + total_depth_anti)
     dict_info['mature_star_ratio_total_both_strand'] = mature_star_ratio_tatal_both_strand
+    dict['total_depth_star'] = max_imperfect_star
     return dict_info
 
 
@@ -2386,7 +2387,7 @@ def check_loci(structures, matures, region, dict_mapinfo_region, which,
                                                                                 structinfo[1], ss, strand, False, exprinfo]
                             dict_why_not_miRNA_reasons[key][key1]['expression_info'] = exprinfo
                             continue
-                        if exprinfo['mature_star_ratio_total'] >=0.8 and exprinfo['total_depth_isoform'] > peak_depth:  # but very high expression
+                        if exprinfo['mature_star_ratio_total'] >= 0.8 and exprinfo['total_depth_isoform'] > peak_depth:  # but very high expression
                             #if min(exprinfo[4]) < 100:
                             #    dict_why_not_miRNA_reasons[key][key1]["FAIL_EXPRESS_PATTERN_NO_STAR_EXPRESSION_LOW_MATURE_EXPRESSION_IN_SOME_SAMPLE"] = "FAILED"
                             #    continue
@@ -2668,7 +2669,7 @@ def gen_gff_from_result(resultlist, gffname):
         mirname = "miRNA-precursor_"+ str(idx)
         has_star_expression = "y"
         overhangsize = "2:2"
-        if mirna[-1]['total_depth_star'] == 0 or ('max_imperfect_star' in mirna[-1] and mirna[-1]['max_imperfect_star'] == 0):
+        if mirna[-1]['total_depth_star'] == 0:
             has_star_expression = 'n'
 
         if 'max_imperfect_star' in mirna[-1] and mirna[-1]['max_imperfect_star'] != 0:

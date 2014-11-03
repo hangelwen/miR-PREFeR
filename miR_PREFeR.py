@@ -2323,7 +2323,7 @@ def check_loci(structures, matures, region, dict_mapinfo_region, which,
 
     num_matures = len(matures)
     num_matures_out_region = 0
-    for m0, m1, strand, mdepth in sorted(matures, key=lambda m: m[3], reverse=True):
+    for m0, m1, strand, mdepth in matures:
         if m1-m0 < min_mature_len or m1-m0 > max_mature_len:
             num_matures_out_region += 1
     # sizes of all matures are out of bounds
@@ -2334,7 +2334,7 @@ def check_loci(structures, matures, region, dict_mapinfo_region, which,
         dict_why_not_miRNA_reasons[key]['HAS_MATURE_SIZE_IN_RANGE'] = 'PASSED'
 
 
-    for m0, m1, strand, mdepth in matures:
+    for m0, m1, strand, mdepth in sorted(matures, key=lambda m: m[3], reverse=True):
         # TODO Move this if to previous stage.
         # if mature length is not in [18-24], then ignore this
         if m1-m0 < min_mature_len or m1-m0 > max_mature_len:

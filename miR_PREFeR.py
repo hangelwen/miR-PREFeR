@@ -2245,7 +2245,8 @@ def check_expression_new(dict_map_info, samplenames, start,
     dict_info['mature_star_ratio_total'] = mature_star_ratio_tatal
     mature_star_ratio_tatal_both_strand =  float(total_depth_mature + max(total_depth_star, max_imperfect_star)) / (total_depth_just_this_strand + total_depth_anti)
     dict_info['mature_star_ratio_total_both_strand'] = mature_star_ratio_tatal_both_strand
-    dict_info['total_depth_star'] = max_imperfect_star
+    if max_imperfect_star in dict_info:
+        dict_info['total_depth_star'] = max( total_depth_star, max_imperfect_star)
     return dict_info
 
 
@@ -2591,14 +2592,17 @@ def convert_failure_reasons_list(list_failure_reasons):
     return out_dict_reasons
 
 
-def write_dict_reasons(dict_reasons, fname, fastaname, combinedsortedbamname, samplenames, outfolder):
+def write_dict_reasons(dict_reasons, fname, faileddumpname, fastaname, combinedsortedbamname, samplenames, outfolder):
     list_not_pass_expression = []
+    dict_express_info_all = {}
     outf = open(fname, 'w')
     for chrom in dict_reasons:  # key is chromosome
         for strand in dict_reasons[chrom]:
             for region in dict_reasons[chrom][strand]:
                 outf.write("===========================================================\n")
-                outf.write(chrom + "\t" + str(region[0]) + "\t" + str(region[1]) + "\t" + strand + "\t" + dict_reasons[chrom][strand][region]['peak'] + "\t" + dict_reasons[chrom][strand][region]['which'] +"\n")
+                regionkey1 = chrom + ":" + str(region[0]) + "-" + str(region[1])
+                regionkey = regionkey1 + "\t" + strand + "\tpeak-region:" + dict_reasons[chrom][strand][region]['peak'] + "\t" + dict_reasons[chrom][strand][region]['which']
+                outf.write( regionkey +"\n")
                 dict_region = dict_reasons[chrom][strand][region]
                 for key in dict_region:
                     if isinstance(key, str):
@@ -2611,10 +2615,13 @@ def write_dict_reasons(dict_reasons, fname, fastaname, combinedsortedbamname, sa
                                 outf.write(v + "\t" + dict_region[key][v] + "\n")
                         if 'expression_info' in dict_region[key]:
                             dict_info = dict_region[key]['expression_info']
+                            dict_express_info_all[regionkey1] = dict_info
                             outf.write("total_depth: {0}, mature_depth: {1}, star_depth:{2}, mature_star_ratio:{3}, ".format(dict_info['total_depth_just_this_strand'], dict_info['total_depth_mature'], dict_info['total_depth_star'], dict_info['mature_star_ratio_total']) + "\n")
                         if 'ss_info' in dict_region[key]:
                             list_not_pass_expression.append(dict_region[key]['ss_info'])
                 outf.write("\n")
+    outdump = open(faileddumpname, 'w')
+    cPickle.dump(dict_express_info_all, outdump)
     dict_not_mirna_info = gen_mirna_info(list_not_pass_expression, fastaname, combinedsortedbamname, samplenames)
     gen_map_result(dict_not_mirna_info, outfolder)
 
@@ -3583,13 +3590,14 @@ def run_predict(dict_option, outtempfolder, recovername):
     stemloopname = os.path.join(dict_option["OUTFOLDER"],dict_option["NAME_PREFIX"]+"_miRNA.precursor.fa")
     ssname = os.path.join(dict_option["OUTFOLDER"],dict_option["NAME_PREFIX"]+"_miRNA.precursor.ss")
     failedname = os.path.join(dict_option["OUTFOLDER"],dict_option["NAME_PREFIX"]+"_reason_why_not_miRNA.txt")
+    faileddumpname = os.path.join(dict_option["OUTFOLDER"],dict_option["NAME_PREFIX"]+"_failed.dict.dump")
     if failed_reasons:
         failedreadmappingfolder = os.path.join(dict_option['OUTFOLDER'],"failed_readmapping")
         if not os.path.exists(failedreadmappingfolder):
             os.mkdir(failedreadmappingfolder)
 
         formatted_fail_reasons = convert_failure_reasons_list(failed_reasons)
-        write_dict_reasons(formatted_fail_reasons, failedname, dict_option["FASTA_FILE"],
+        write_dict_reasons(formatted_fail_reasons, failedname, faileddumpname, dict_option["FASTA_FILE"],
                            os.path.join(outtempfolder,
                                         "combined.filtered.sort.bam"),
                            samplenames, failedreadmappingfolder)

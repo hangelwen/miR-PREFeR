@@ -2212,6 +2212,10 @@ def check_expression_new(dict_map_info, samplenames, start,
     dict_info['total_depth_star'] = total_depth_star
     dict_info['total_depth_imperfect_star'] = total_depth_imperfect_star
     dict_info['mature_depth_each_sample'] = mature_depth_each_sample
+    if starpos_genome[0] > maturepos_genome[1]:
+        dict_info['mature_star_distance'] = starpos_genome[0] - maturepos_genome[1]
+    else:
+        dict_info['mature_star_distance'] = maturepos_genome[0] - starpos_genome[1]
 
     def get_imperfect_star_pos():
         max_imperfect_star = max(total_depth_imperfect_star)
@@ -2228,6 +2232,7 @@ def check_expression_new(dict_map_info, samplenames, start,
             return (which, max_imperfect_star, starpos_genome[0]+1, starpos_genome[1])
         if which == 2:
             return (which, max_imperfect_star, starpos_genome[0]+1, starpos_genome[1]+1)
+
 
     max_imperfect_star = 0
     if total_depth_star == 0 and allow_3nt_overhang:
@@ -2248,6 +2253,7 @@ def check_expression_new(dict_map_info, samplenames, start,
     dict_info['mature_iso_star_ratio_total'] = float(total_depth_isoform + max(total_depth_star, max_imperfect_star)) / total_depth_just_this_strand
     if max_imperfect_star in dict_info:
         dict_info['total_depth_star'] = max( total_depth_star, max_imperfect_star)
+
     return dict_info
 
 
@@ -2295,10 +2301,9 @@ def check_expression(ss, dict_extendregion_info, maturepos_genome, mature_depth,
 def check_loci(structures, matures, region, dict_mapinfo_region, which,
                samplenames, allow_3nt_overhang, allow_no_star, min_mature_len,
                max_mature_len, peak_depth):
+
     # This function returns either the list 'miRNAs' or the
     # dict 'dict_why_not_miRNA_reasons'
-
-
     miRNAs = []
     # record the reason why a region is not predicted as a miRNA.
     # Only the first reason is recorded. For example, it's possible that
@@ -2318,7 +2323,7 @@ def check_loci(structures, matures, region, dict_mapinfo_region, which,
 
     num_matures = len(matures)
     num_matures_out_region = 0
-    for m0, m1, strand, mdepth in matures:
+    for m0, m1, strand, mdepth in sorted(matures, key=lambda m: m[3], reverse=True):
         if m1-m0 < min_mature_len or m1-m0 > max_mature_len:
             num_matures_out_region += 1
     # sizes of all matures are out of bounds
@@ -2327,6 +2332,7 @@ def check_loci(structures, matures, region, dict_mapinfo_region, which,
         return dict_why_not_miRNA_reasons
     else:
         dict_why_not_miRNA_reasons[key]['HAS_MATURE_SIZE_IN_RANGE'] = 'PASSED'
+
 
     for m0, m1, strand, mdepth in matures:
         # TODO Move this if to previous stage.
@@ -2366,6 +2372,12 @@ def check_loci(structures, matures, region, dict_mapinfo_region, which,
                                                     strand,
                                                     allow_3nt_overhang
                                                  )
+                    if exprinfo['mature_star_distance'] <= 3:
+                           dict_why_not_miRNA_reasons[key][key1]["FAIL_EXPRESS_PATTERN_MATURE_STAR_TOO_CLOSE"] = "FAILED"
+                           dict_why_not_miRNA_reasons[key][key1]['ss_info'] = [region[0], structinfo[2],
+                                                                               structinfo[3], m0, m1, structinfo[0],
+                                                                               structinfo[1], ss, strand, True, exprinfo]
+                           continue
                     if exprinfo['total_depth_star'] > 0:  # has star expression
                         if exprinfo['mature_star_ratio_total'] < 0.2:
                             dict_why_not_miRNA_reasons[key][key1]["FAIL_EXPRESS_PATTERN_HAS_STAR_BUT_TOO_FEW_READS_MAPPED_TO_DUPLEX"] = "FAILED"

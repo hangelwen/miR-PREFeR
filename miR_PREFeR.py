@@ -2245,7 +2245,7 @@ def check_expression_new(dict_map_info, samplenames, start,
     dict_info['mature_star_ratio_total'] = mature_star_ratio_tatal
     mature_star_ratio_tatal_both_strand =  float(total_depth_mature + max(total_depth_star, max_imperfect_star)) / (total_depth_just_this_strand + total_depth_anti)
     dict_info['mature_star_ratio_total_both_strand'] = mature_star_ratio_tatal_both_strand
-    dict['total_depth_star'] = max_imperfect_star
+    dict_info['total_depth_star'] = max_imperfect_star
     return dict_info
 
 

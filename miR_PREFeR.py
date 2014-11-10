@@ -1422,12 +1422,13 @@ def gen_candidate_region_typeA(dict_contigs, dict_len, dict_option, tmpdir,
                 rightend = seqlen
             return [(leftstart, leftend), (rightstart, rightend)]
         else:
-            left = region[0] - 25
-            right = region[1] + 25
+            extend_both_side = (max_transcript - length) / 2
+            left = region[0] - extend_both_side
+            right = region[1] + extend_both_side
             if left < 0:
-                left = 0
+                left = 1
             if right > seqlen:
-                right = seqlen
+                right = seqlen + 1
             return [(left, right)]
 
     dict_loci = {}
@@ -2129,11 +2130,13 @@ def get_maturestar_info(ss, mature, foldstart, foldend, regionstart, regionend,
 
 
 def gen_mapinfo_each_sample(combinedsortedbamname, samplenames, chromID, start, end):
+    # start and end are one based.
     dict_map_info = {}
     for sample in samplenames:
         dict_map_info[sample] = {"+" : {},
                                  "-" : {}
         }
+    #SAM file and bam file (if accessed using samtools) are 1 based.
     alignments = samtools_view_region(combinedsortedbamname, chromID, start,
                                       end-1)
     for aln in alignments:
@@ -2164,7 +2167,7 @@ def gen_mapinfo_each_sample(combinedsortedbamname, samplenames, chromID, start, 
 def check_expression_new(dict_map_info, samplenames, start,
                          end, maturepos_genome, mature_depth,
                          starpos_genome, strand, allow_3nt_overhang):
-
+    # position in dict_map_info are 1 based. All others are zero based.
     dict_info = {}
     mature_len = maturepos_genome[1] - maturepos_genome[0]
     star_len = starpos_genome[1] - starpos_genome[0]
@@ -2189,7 +2192,7 @@ def check_expression_new(dict_map_info, samplenames, start,
     for aln_strand in ['+', '-']:
         for startpos in range(start, end):
             for read_sample in dict_map_info:
-                if startpos in dict_map_info[read_sample][aln_strand]:
+                if (startpos) in dict_map_info[read_sample][aln_strand]:
                     if strand == aln_strand:
                         dict_info[sample]['bases_with_reads_start'] += 1
                     for read, depth in dict_map_info[read_sample][aln_strand][startpos]:
@@ -2287,7 +2290,6 @@ def check_expression_new(dict_map_info, samplenames, start,
     dict_info['mature_iso_star_ratio_total'] = float(total_depth_isoform + max(total_depth_star, max_imperfect_star)) / total_depth_just_this_strand
     if max_imperfect_star in dict_info:
         dict_info['total_depth_star'] = max( total_depth_star, max_imperfect_star)
-
     return dict_info
 
 
@@ -2473,7 +2475,7 @@ def filter_next_loci(alndumpname, rnalfoldoutname, combinedsortedbamname,
             region, which, dict_aln, matures = cPickle.load(alnf)
         except EOFError:
             raise StopIteration
-
+        # position in dict_mapinfo_region, region are all one-based.
         dict_mapinfo_region = gen_mapinfo_each_sample(combinedsortedbamname,
                                                       samplenames, region[0],
                                                       region[1][0], region[1][1]
@@ -2483,6 +2485,7 @@ def filter_next_loci(alndumpname, rnalfoldoutname, combinedsortedbamname,
             structures = next(ss_generator)
             peak = structures[1]
             which_and_ss = (structures[0], structures[2])
+            # all positions are one based.
             miRNAs = check_loci(which_and_ss, matures, region,
                                 dict_mapinfo_region, which, samplenames,
                                 allow_3nt_overhang,

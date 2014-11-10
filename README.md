@@ -46,7 +46,9 @@ If successful, you should see an executable program named "samtools" in the same
 #### a. Homebrew users ####
 Homebrew  <https://github.com/Homebrew/homebrew> is a fantastic package manager for MacOS. If you use Homebrew to manage your package on your Mac, mir-prefer and all it's dependencies can be installed simply by the following command
 
-    brew install mir-prefer
+    brew tap homebrew/science
+    brew update
+    brew install --HEAD mir-prefer
 
 Instructions on how to install and use homebrew can be found at <http://coolestguidesontheplanet.com/setting-up-os-x-mavericks-and-homebrew/>.
 

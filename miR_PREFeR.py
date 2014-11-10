@@ -1197,6 +1197,7 @@ def dump_loci_seqs_and_alignment(dict_loci, sortedbamname, fastaname, outputseqp
 def dump_loci_seqs_and_alignment_multiprocess(dict_loci, piece_info_list,
                                               sortedbamname, fastaname,
                                               outputseqprefix, outputalnprefix,
+                                              min_mature_depth,
                                               logger):
     def dump_piece(dict_loci, piece_info_list,sortedbamname, fastaname,
                    outputfastaname, outputalnname, queue):
@@ -1252,30 +1253,49 @@ def dump_loci_seqs_and_alignment_multiprocess(dict_loci, piece_info_list,
                     if len(strands) == 1:
                         cur_strand = "+"
                         if "+" in strands:
-                            seqtag = ">"+regionpos+" + "+ loci_pos + extendregiontag + otherinfo+"\n"  # >ExtendRegion strand loci 0/L/R peaks
+                            seqtag = ">"+regionpos+" + "+ loci_pos + extendregiontag + otherinfo  # >ExtendRegion strand loci 0/L/R peaks
                             dump_key = [seqid, (extendregion[0][0],extendregion[0][1]), "+"]
                         else:
                             cur_strand = "-"
-                            seqtag = ">"+regionpos+" - "+ loci_pos + extendregiontag + otherinfo+"\n"
+                            seqtag = ">"+regionpos+" - "+ loci_pos + extendregiontag + otherinfo
                             dump_key = [seqid, (extendregion[0][0],extendregion[0][1]), "-"]
                             seq = get_reverse_complement(seq)
-                        fout.write(seqtag)
-                        fout.write(seq+"\n")
-                        num_seq += 1
+
                         alignments = samtools_view_region(sortedbamname, seqid,
                                                           extendregion[0][0],
                                                           extendregion[0][1])
                         dict_loci_info = gen_loci_alignment_info(alignments, seqid, extendregion)
-                        matures = gen_possible_matures_loci(dict_loci_info, extendregion, cur_strand)
+                        matures = gen_possible_matures_loci(dict_loci_info, extendregion, cur_strand, min_mature_depth)
                         cPickle.dump([dump_key, extendregiontag.strip(), dict_loci_info, matures], foutdump, protocol=2)
+                        for m in matures:
+                            seqtag += " " + "M:" + str(m[0])+"-"+str(m[1]) + "/" + str(m[2]) + "/" + str(m[3])
+                        seqtag += "\n"
+                        fout.write(seqtag)
+                        fout.write(seq+"\n")
+                        num_seq += 1
                         continue
                     if len(strands) == 2:  # this region has peaks on both strands, generate precursors for each strand
+                        alignments = samtools_view_region(sortedbamname, seqid,
+                                                          extendregion[0][0],
+                                                          extendregion[0][1])
+                        dict_loci_info = gen_loci_alignment_info(alignments, seqid, extendregion)
+                        matures_plus = gen_possible_matures_loci(dict_loci_info, extendregion, "+", min_mature_depth)
+                        dump_key = [seqid, (extendregion[0][0],extendregion[0][1]), "+"]
+                        plus_dumpinfo.append([dump_key, extendregiontag.strip(), dict_loci_info, matures_plus])
+                        matures_minus = gen_possible_matures_loci(dict_loci_info, extendregion, "-", min_mature_depth)
+                        dump_key = [seqid, (extendregion[0][0],extendregion[0][1]), "-"]
+                        minus_dumpinfo.append([dump_key, extendregiontag.strip(), dict_loci_info, matures_minus])
+
                         otherinfo_plus = ""
                         for peak in extendregion[1]:
                             if peak[2] == "+":
                                 otherinfo_plus = otherinfo_plus + str(peak[0])+","+str(peak[1])+","+str(peak[2])+";"
                         otherinfo_plus = otherinfo_plus.rstrip(";")
-                        seqtag = ">"+regionpos+" + "+ loci_pos + extendregiontag + otherinfo_plus+"\n"
+                        seqtag = ">"+regionpos+" + "+ loci_pos + extendregiontag + otherinfo_plus
+                        for m in matures_plus:
+                            seqtag += " " + "M:" + str(m[0])+"-"+str(m[1]) + "/" + str(m[2]) + "/" + str(m[3])
+                        seqtag += "\n"
+
                         plus_tag.append(seqtag)
                         plus_seq.append(seq)
                         num_seq += 1
@@ -1284,21 +1304,15 @@ def dump_loci_seqs_and_alignment_multiprocess(dict_loci, piece_info_list,
                             if peak[2] == "-":
                                 otherinfo_minus = otherinfo_minus + str(peak[0])+","+str(peak[1])+","+str(peak[2])+";"
                         otherinfo_minus = otherinfo_minus.rstrip(";")
-                        seqtag = ">"+regionpos+" - "+ loci_pos + extendregiontag + otherinfo_minus+"\n"
+                        seqtag = ">"+regionpos+" - "+ loci_pos + extendregiontag + otherinfo_minus
+                        for m in matures_minus:
+                            seqtag += " " + "M:" + str(m[0])+"-"+str(m[1]) + "/" + str(m[2]) + "/" + str(m[3])
+                        seqtag += "\n"
                         seq = get_reverse_complement(seq)
                         minus_tag.append(seqtag)
                         minus_seq.append(seq)
                         num_seq += 1
-                        alignments = samtools_view_region(sortedbamname, seqid,
-                                                          extendregion[0][0],
-                                                          extendregion[0][1])
-                        dict_loci_info = gen_loci_alignment_info(alignments, seqid, extendregion)
-                        matures_plus = gen_possible_matures_loci(dict_loci_info, extendregion, "+")
-                        dump_key = [seqid, (extendregion[0][0],extendregion[0][1]), "+"]
-                        plus_dumpinfo.append([dump_key, extendregiontag.strip(), dict_loci_info, matures_plus])
-                        matures_minus = gen_possible_matures_loci(dict_loci_info, extendregion, "-")
-                        dump_key = [seqid, (extendregion[0][0],extendregion[0][1]), "-"]
-                        minus_dumpinfo.append([dump_key, extendregiontag.strip(), dict_loci_info, matures_minus])
+
                         if len(plus_tag):
                             for which, tag in enumerate(plus_tag):
                                 fout.write(tag)
@@ -1585,23 +1599,43 @@ def gen_loci_alignment_info(alignments, seqid, loci):
     return dict_loci_info
 
 
-def gen_possible_matures_loci(dict_loci_info, loci, strand):
+def gen_possible_matures_loci(dict_loci_info, loci, strand, min_mature_depth):
+    def gen_matures_one_peak(max_num_mature, min_mature_depth, peak_start, peak_end):
+        matures = []
+        higest = (0, 0, 0, 0)
+        for pos in xrange(peak_start, peak_end):
+            if pos in dict_loci_info[0]:
+                if strand in dict_loci_info[0][pos]:
+                    if dict_loci_info[0][pos][strand][0][1] > higest[3]:
+                        higest = (pos, pos+dict_loci_info[0][pos][strand][0][0], strand, dict_loci_info[0][pos][strand][0][1])
+                    if dict_loci_info[0][pos][strand][0][1] > min_mature_depth:
+                        if len(matures) < max_num_mature:
+                            matures.append((pos, pos+dict_loci_info[0][pos][strand][0][0], strand, dict_loci_info[0][pos][strand][0][1]))
+                        elif dict_loci_info[0][pos][strand][0][1] > matures[-1][-1]:
+                            matures[-1] = (pos, pos+dict_loci_info[0][pos][strand][0][0], strand, dict_loci_info[0][pos][strand][0][1])
+                        matures.sort(key=lambda x: x[2], reverse=True)
+        if not matures:
+            matures.append(higest)
+        return matures
+
     ret_matures = []
     for start, end, curstrand in loci[1]:
         if curstrand != strand:
             continue
-        mature_depth = 0
-        mature_length = 0
-        mature_pos = 0
-        for pos in xrange(start,end):
-            if pos in dict_loci_info[0]:
-                if strand in dict_loci_info[0][pos]:
-                    if dict_loci_info[0][pos][strand][0][1] > mature_depth:
-                        mature_depth = dict_loci_info[0][pos][strand][0][1]
-                        mature_length = dict_loci_info[0][pos][strand][0][0]
-                        mature_pos = pos
-        mature = (mature_pos, mature_pos+mature_length, strand, mature_depth)
-        ret_matures.append(mature)
+        # mature_depth = 0
+        # mature_length = 0
+        # mature_pos = 0
+        # for pos in xrange(start,end):
+        #     if pos in dict_loci_info[0]:
+        #         if strand in dict_loci_info[0][pos]:
+        #             if dict_loci_info[0][pos][strand][0][1] > mature_depth:
+        #                 mature_depth = dict_loci_info[0][pos][strand][0][1]
+        #                 mature_length = dict_loci_info[0][pos][strand][0][0]
+        #                 mature_pos = pos
+        # mature = (mature_pos, mature_pos+mature_length, strand, mature_depth)
+        #ret_matures.append(mature)
+        matures = gen_matures_one_peak(2, min_mature_depth, start, end)
+        ret_matures.extend(matures)
     return ret_matures
 
 
@@ -2274,7 +2308,6 @@ def check_expression(ss, dict_extendregion_info, maturepos_genome, mature_depth,
         for s in dict_extendregion_info[0][pos]: # for both strands
             total_depth += dict_extendregion_info[0][pos][s][0][-1]  # total depth on both strand?
             all_depth.append(dict_extendregion_info[0][pos][s][0][-1])
-    print(all_depth)
     if starpos_genome[0] not in dict_extendregion_info[0]:
         star_depth = 0
     elif strand not in dict_extendregion_info[0][starpos_genome[0]]:
@@ -2301,7 +2334,6 @@ def check_expression(ss, dict_extendregion_info, maturepos_genome, mature_depth,
 def check_loci(structures, matures, region, dict_mapinfo_region, which,
                samplenames, allow_3nt_overhang, allow_no_star, min_mature_len,
                max_mature_len, peak_depth):
-
     # This function returns either the list 'miRNAs' or the
     # dict 'dict_why_not_miRNA_reasons'
     miRNAs = []
@@ -3465,6 +3497,7 @@ def run_candidate(dict_option, outtempfolder, recovername):
                                                                               dict_option["FASTA_FILE"],
                                                                               rnalfoldinputprefix,
                                                                               outputdumpprefix,
+                                                                              dict_option['READS_DEPTH_CUTOFF'] * 0.5,
                                                                               logger)
     write_formatted_string_withtime( "All sequences generated.", 30, sys.stdout)
     loci_dump_file = open(loci_dump_name, 'wb')
@@ -3592,16 +3625,6 @@ def run_predict(dict_option, outtempfolder, recovername):
                                                       55,
                                                       dict_option['READS_DEPTH_CUTOFF'],
                                                       logger)
-    if len(result)==0:
-        write_formatted_string_withtime("0 miRNA identified. No result files generated.", 30, sys.stdout)
-        if logger:
-            logger.info("0 miRNA identified. No result files generated.")
-        sys.exit(0)
-
-    gffname = os.path.join(dict_option["OUTFOLDER"],dict_option["NAME_PREFIX"]+"_miRNA.gff3")
-    maturename = os.path.join(dict_option["OUTFOLDER"],dict_option["NAME_PREFIX"]+"_miRNA.mature.fa")
-    stemloopname = os.path.join(dict_option["OUTFOLDER"],dict_option["NAME_PREFIX"]+"_miRNA.precursor.fa")
-    ssname = os.path.join(dict_option["OUTFOLDER"],dict_option["NAME_PREFIX"]+"_miRNA.precursor.ss")
     failedname = os.path.join(dict_option["OUTFOLDER"],dict_option["NAME_PREFIX"]+"_reason_why_not_miRNA.txt")
     faileddumpname = os.path.join(dict_option["OUTFOLDER"],dict_option["NAME_PREFIX"]+"_failed.dict.dump")
     if failed_reasons:
@@ -3614,6 +3637,18 @@ def run_predict(dict_option, outtempfolder, recovername):
                            os.path.join(outtempfolder,
                                         "combined.filtered.sort.bam"),
                            samplenames, failedreadmappingfolder)
+
+    if len(result)==0:
+        write_formatted_string_withtime("0 miRNA identified. No result files generated.", 30, sys.stdout)
+        if logger:
+            logger.info("0 miRNA identified. No result files generated.")
+        sys.exit(0)
+
+    gffname = os.path.join(dict_option["OUTFOLDER"],dict_option["NAME_PREFIX"]+"_miRNA.gff3")
+    maturename = os.path.join(dict_option["OUTFOLDER"],dict_option["NAME_PREFIX"]+"_miRNA.mature.fa")
+    stemloopname = os.path.join(dict_option["OUTFOLDER"],dict_option["NAME_PREFIX"]+"_miRNA.precursor.fa")
+    ssname = os.path.join(dict_option["OUTFOLDER"],dict_option["NAME_PREFIX"]+"_miRNA.precursor.ss")
+
 
     write_formatted_string_withtime("The output files are in " + dict_option["OUTFOLDER"], 30, sys.stdout)
     if logger:

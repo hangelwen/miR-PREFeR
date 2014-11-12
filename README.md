@@ -46,7 +46,9 @@ If successful, you should see an executable program named "samtools" in the same
 #### a. Homebrew users ####
 Homebrew  <https://github.com/Homebrew/homebrew> is a fantastic package manager for MacOS. If you use Homebrew to manage your package on your Mac, mir-prefer and all it's dependencies can be installed simply by the following command
 
-    brew install mir-prefer
+    brew tap homebrew/science
+    brew update
+    brew install --HEAD mir-prefer
 
 Instructions on how to install and use homebrew can be found at <http://coolestguidesontheplanet.com/setting-up-os-x-mavericks-and-homebrew/>.
 
@@ -179,14 +181,17 @@ The miR\_PREFeR.py script takes a configuration file as input. The configuration
 1. PIPELINE_PATH: The path of the miR-PREFeR pipeline.
 2. FASTA_FILE: The path of the genome sequences in fasta format. Absolute path preferred.
 3. ALIGNMENT_FILE: The path of the RNAseq alignment files in SAM format. Absolute path preferred.
-4. GFF_FILE: The path of the optional GFF file. Absolute path preferred.
+4. GFF file option. GFF\_FILE\_EXCLUDE: The path of the optional GFF file that contains regions you want to exclude from the miRNA analysis. GFF\_FILE\_INCLUDE: The path of the optional GFF file that contains regions you want to analysis. These two options are mutual exclusive thus only one of them can be specified.
 5. PRECURSOR_LEN: The max length of a miRNA precursor. The default is 300
 6. READS_DEPTH\_CUTOFF: The first step of the pipeline is to identify candidate regions of the miRNA loci. If READS\_DEPTH\_CUTOFF = N, then genomic position that the mapped depth is smaller than N is not considered. Default value is 10.
 7. NUM\_OF\_CORE: Number of CPUS/Cores avalible for this computation. If commented out or leave blank, 1 is used.
 8. OUTFOLDER: Outputfolder. If not specified, use the current working directory.
 9. NAME\_PREFIX: Prefix for naming the output files. For portability, please DO NOT contain any spaces and special characters. The prefered includes 'A-Z', 'a-z', '0-9', and underscore '_'.
 10. MAX_GAP: Maximum gap length between two contigs to form a candidate region. Default value is 100.
-11. CHECKPOINT_SIZE: The pipeline makes a checkpoint after each major step. In addition, because the folding stage is the most time consuming stage, it makes a checkpiont for each folding process after folding every CHECKPOINT\_SIZE sequences. If the pipeline is killed for some reason in the middle of folding, it can be restarted using `recover` command from where it was stopped. The default value is 3000.
+11. MIN_MATURE\_LEN and MAX\_MATURE_LEN: the range of the mature length. The default values are 18 and 24, respectively.
+12. ALLOW_NO\_STAR\_EXPRESSION: If this is 'Y', then the criteria that requries the star sequence must be expressed (that is, there should be at least one read mapped to the star position.) is loosed if the expression pattern is good enough (.e.g. the majority of the reads mapped to the region are mapped to the mature position, and the expression patterns are consistent across different samples). The default value is Y.
+13. ALLOW\_3NT\_OVERHANG: In most cases, the mature star duplex has 2nt 3' overhangs. If this is set to 'Y', then 3nt overhangs are allowed. The default value is 'N'.
+14. CHECKPOINT_SIZE: The pipeline makes a checkpoint after each major step. In addition, because the folding stage is the most time consuming stage, it makes a checkpiont for each folding process after folding every CHECKPOINT\_SIZE sequences. If the pipeline is killed for some reason in the middle of folding, it can be restarted using `recover` command from where it was stopped. The default value is 3000.
 
 ### c. Run the pipeline. ###
 
@@ -212,6 +217,8 @@ Currently, the following options are available:
 
     `python miR_PREFeR.py -L recover configfile`
 
+**Tips for running the pipeline:** If you run the pipeline once and change the following configuration parameters and want to run it again, you do not need to run the pipeline from the start. You can just run the `predict` command. This saves you lots of time. These configuration parameters include: MIN_MATURE\_LEN, MAX\_MATURE\_LEN, ALLOW\_NO\_STAR\_EXPRESSION and ALLOW\_3NT\_OVERHANG.
+
 **NOTE on job recovery:** To recover and continue a job, the intermediate output
   files in the temporary folder (See the Output section) should not be
   removed. All files needed to do recovery are in this folder.
@@ -234,7 +241,9 @@ the predicted miRNAs:
    for easier downstream processing/analysis.
 3. A list of read mapping result files in the folder `readmapping`. Each file
    corresponds to an miRNA and shows the reads mapped to the precursor region.
-4. A gff3 format annotation file that contains the predicted miRNAs.
+4. A gff3 format annotation file that contains the predicted miRNAs. The last column
+   for each precursor contains information about whether the star sequence is expressed
+   in the samples (star\_expressed=y/n) and the overhang sizes (overhangsize=2:2).
 5. Two fasta files that contain the mature sequences and the precursor sequences
    of the predicted miRNAs.
 6. A `.ss` file that contains the sequence and the predicted structure of each

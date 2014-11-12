@@ -15,13 +15,6 @@ import logging
 import shutil
 
 
-dict_failure_reasons = {1: "Structure is not stemloop",
-                       2: "Mature-star duplex has too many bugles/interior loops",
-                       3: "Mature-star duplex has large bugles/interior loops",
-                       4: "Star sequence not expression in the RNA-seq data",
-                       5: "Expression pattern not good"
-}
-
 def parse_option():
     import argparse
     helpstr = """    check = Check the dependency and the config file only (default).
@@ -68,6 +61,7 @@ configfile: configuration file"""
                       help="Generate a log file.")
     parser.add_option("-k", "--keep-tmp", action="store_true", dest="keeptmp",
                       help="After finish the whole pipeline, do not remove the temporary folder that contains the intermidate files.")
+    parser.add_option("-d", "--output-detail-for-debug", action='store_true', dest='debugmode')
     actions = ['check','prepare','candidate','fold', 'predict', 'pipeline', 'recover']
     (options, args) = parser.parse_args()
     if len(args) != 2:
@@ -78,6 +72,9 @@ configfile: configuration file"""
     dict_option['ACTION'] = args[0]
     dict_option["LOG"] = options.log
     dict_option["KEEPTMP"] = options.keeptmp
+    dict_option['OUTPUT_DETAILS_FOR_DEBUG'] = False
+    if options.debugmode:
+        dict_option['OUTPUT_DETAILS_FOR_DEBUG'] = options.debugmode
     return dict_option
 
 def parse_configfile(configfile):
@@ -88,7 +85,8 @@ def parse_configfile(configfile):
         "CONFIG_FILE":configfile,
         "FASTA_FILE":"",
         "ALIGNMENT_FILE":[],
-        "GFF_FILE":"",
+        "GFF_FILE_EXCLUDE": "",
+        "GFF_FILE_INCLUDE": "",
         "PRECURSOR_LEN":300,
         "READS_DEPTH_CUTOFF":10,
         "MAX_GAP":100,
@@ -97,7 +95,12 @@ def parse_configfile(configfile):
         "NAME_PREFIX":"",
         "PIPELINE_PATH":"",
         "DELETE_IF_SUCCESS":"Y",
-        "CHECKPOINT_SIZE":3000  #checkpoint every 3000 sequences
+        "CHECKPOINT_SIZE":3000,  #checkpoint every 3000 sequences
+        "MIN_MATURE_LEN": 18,
+        "MAX_MATURE_LEN": 23,
+        "ALLOW_3NT_OVERHANG": False,
+        "ALLOW_NO_STAR_EXPRESSION": True,
+        "OUTPUT_DETAILS_FOR_DEBUG": False
     }
     with open(configfile) as f:
         for line in f:
@@ -117,7 +120,7 @@ def parse_configfile(configfile):
                             sys.exit(-1)
                         dict_option[key].append(os.path.expanduser(name.strip()))
                     continue
-                if key == "GFF_FILE" or key == "FASTA_FILE":
+                if key == "GFF_FILE_EXCLUDE" or key == "GFF_FILE_INCLUDE" or key == "FASTA_FILE":
                     if not os.path.exists(os.path.expanduser(sp[1].strip())):
                         sys.stderr.write("File " + sp[1].strip() +
                                           " does not exist!!\n")
@@ -134,7 +137,7 @@ def parse_configfile(configfile):
                         cpu_to_use = 2*cpucount
                     dict_option[key] = cpu_to_use
                     continue
-                if key == "PRECURSOR_LEN":
+                if key == "PRECURSOR_LEN" or key == "MAX_MATURE_LEN" or key == "MIN_MATURE_LEN":
                     dict_option[key] = int(sp[1].strip())
                     continue
                 if key == "READS_DEPTH_CUTOFF" or key == 'MAX_GAP' or key == 'CHECKPOINT_SIZE':
@@ -142,6 +145,16 @@ def parse_configfile(configfile):
                     continue
                 if key =="OUTFOLDER" or key == "NAME_PREFIX" or key == "DELETE_IF_SUCCESS":
                     dict_option[key] = sp[1].strip()
+                    continue
+                if key == 'ALLOW_NO_STAR_EXPRESSION' or key == 'ALLOW_3NT_OVERHANG':
+                    value = sp[1].strip().lower()
+                    if value != 'y' and value != 'n':
+                        sys.stderr.write("Value for ALLOW_3NT_OVERHANG/ALLOW_NO_STAR_EXPRESSION must be one of 'Y/y/N/n'.\n")
+                        sys.exit(-1)
+                    if value == 'y':
+                        dict_option[key] = True
+                    else:
+                        dict_option[key] = False
                     continue
                 if key == "PIPELINE_PATH":
                     if not os.path.exists(os.path.expanduser(sp[1].strip())):
@@ -151,14 +164,20 @@ def parse_configfile(configfile):
                     dict_option[key] = os.path.expanduser(sp[1].strip())
                     continue
     allgood = True
-    if dict_option["PRECURSOR_LEN"]<60 or dict_option["PRECURSOR_LEN"]>3000:
+    if dict_option["PRECURSOR_LEN"] < 60 or dict_option["PRECURSOR_LEN"] > 3000:
         sys.stderr.write("Error: allowed precursor range: 60-3000\n")
+        allgood = False
+    if dict_option['MIN_MATURE_LEN'] > dict_option['MAX_MATURE_LEN']:
+        sys.stderr.write("Error: MIN_MATURE_LEN is greater than MAX_MATURE_LEN.\n")
         allgood = False
     if dict_option["READS_DEPTH_CUTOFF"] < 2:
         sys.stderr.write("Error: READS_DEPTH_CUTOFF should >=2.\n")
         allgood = False
     if dict_option["CHECKPOINT_SIZE"] < 10:
         sys.stderr.write("Error: CHECKPOINT_SIZE should >=10.\n")
+        allgood = False
+    if dict_option['GFF_FILE_INCLUDE'] and dict_option['GFF_FILE_EXCLUDE']:
+        sys.stderr.write("Error: GFF_FILE_EXCLUDE and GFF_FILE_INCLUDE are mutual exclusive, please remove one of them.\n")
         allgood = False
     if not allgood:
         exit(-1)
@@ -519,14 +538,16 @@ def gen_temp_gff(gffname, tmpdir):
     fout.close()
     return tempgffname
 
-def gen_keep_regions_from_gff(gffname, tmpdir, dict_len, minlen):
+
+def gen_keep_regions_from_exclude_gff(gffname, tmpdir, dict_len, minlen):
     '''
     Generate a BED format file which contains all the regions that are not
     overlap with the regions of the features in the gff file.
 
-    Note that gff file is 0 based, and the ending position is inclusive. BED
-    file is 1 based, and the ending position is exclusive.
+    Note that gff file is 1 based, and the ending position is inclusive.
+    BED file is 0 based, and the ending position is exclusive.
     '''
+
     def overlap(r1, r2):
         '''
         If r1 and r2 overlaps, return the combined region, else, return None.
@@ -547,7 +568,7 @@ def gen_keep_regions_from_gff(gffname, tmpdir, dict_len, minlen):
             retcode = p.poll()
             if retcode is None:
                 write_formatted_string_withtime("Sorting GFF file.", 30, sys.stdout)
-                time.sleep(10)
+                time.sleep(5)
             else:
                 write_formatted_string_withtime("GFF file sorting done.", 30, sys.stdout)
                 break
@@ -570,9 +591,9 @@ def gen_keep_regions_from_gff(gffname, tmpdir, dict_len, minlen):
             if cur_seqid != seqid:
                 if seqid != "NOTKNOW":
                     if dict_len[seqid] - region[1] >= minlen:
-                        foutput.write(seqid+"\t"+str(region[1]+1)+"\t"+str(dict_len[seqid])+"\n")
+                        foutput.write(seqid+"\t"+str(region[1]-1)+"\t"+str(dict_len[seqid])+"\n")
                 if int(sp[3]) >=minlen:
-                    foutput.write(cur_seqid+"\t1"+"\t"+sp[3]+"\n")
+                    foutput.write(cur_seqid+"\t0"+"\t"+sp[3]+"\n")
                 seqid = cur_seqid
                 region = (int(sp[3]), int(sp[4]))
             else:
@@ -581,14 +602,54 @@ def gen_keep_regions_from_gff(gffname, tmpdir, dict_len, minlen):
                     region = ret
                 else:
                     if int(sp[3])-region[1] >=minlen:
-                        foutput.write(cur_seqid+"\t"+str(region[1]+1)+"\t"+sp[3]+"\n")
+                        foutput.write(cur_seqid+"\t"+str(region[1]-1)+"\t"+sp[3]+"\n")
                     region = (int(sp[3]), int(sp[4]))
                     seqid = cur_seqid
             #write the last one
         if dict_len[seqid] - region[1] >= minlen:
-            foutput.write(seqid+"\t"+str(region[1]+1)+"\t"+str(dict_len[seqid])+"\n")
+            foutput.write(seqid+"\t"+str(region[1]-1)+"\t"+str(dict_len[seqid])+"\n")
         foutput.close()
     return tempbedname
+
+
+def gen_keep_regions_from_include_gff(gffname, tmpdir, minlen):
+    '''
+    Generate a BED format file which contains all the regions that are
+    overlap with the regions of the features in the gff file.
+
+    Note that gff file is 0 based, and the ending position is inclusive. BED
+    file is 1 based, and the ending position is exclusive.
+    '''
+    tempgffunsortname = gen_temp_gff(gffname, tmpdir)
+    #sort the gff file
+    tempgffname = os.path.join(tmpdir, "temp.remove.gff")
+    tempbedname = os.path.join(tmpdir, "temp.keepregion.bed")
+    command = "sort -k1,1 -k4,4n " + tempgffunsortname + " -o " + tempgffname
+    try:
+        p = subprocess.Popen(command.split())
+        while True:
+            retcode = p.poll()
+            if retcode is None:
+                write_formatted_string_withtime("Sorting GFF file.", 30, sys.stdout)
+                time.sleep(5)
+            else:
+                write_formatted_string_withtime("GFF file sorting done.", 30, sys.stdout)
+                break
+    except Exception as e:
+        sys.stderr.write("Error occurred when sorting the GFF file.\n")
+        sys.stderr.write("Exception message: " + str(e) + "\n")
+        sys.exit(-1)
+    foutput = open(tempbedname, 'w')
+    with open(tempgffname) as f:
+        for line in f:
+            if line.startswith("#"):
+                continue
+            sp = line.split()
+            if int(sp[4])-int(sp[3]) >=minlen:
+                foutput.write(sp[0]+"\t"+str(int(sp[3])-1)+"\t"+sp[4]+"\n")
+        foutput.close()
+    return tempbedname
+
 
 
 def sam2bam(samfile, bamfile):
@@ -751,13 +812,13 @@ def prepare_data(dict_option, outtempfolder, logger):
         shutil.copyfile(bamfiles[0], combinedbamname)
 
     #removing reads that are overlapped with features in the gff file, if provided.
-    if os.path.exists(dict_option["GFF_FILE"]):
+    if os.path.exists(dict_option["GFF_FILE_EXCLUDE"]):
         #TODO: minlen should be user adjustable, not fix here.
         write_formatted_string_withtime("Removing reads that are overlapped with features in the GFF file.", 30, sys.stdout)
         if logger:
             logger.info("Removing reads that are overlapped with features in the GFF file.")
 
-        tempkeepregion = gen_keep_regions_from_gff(dict_option["GFF_FILE"], outtempfolder, dict_len, 55)
+        tempkeepregion = gen_keep_regions_from_exclude_gff(dict_option["GFF_FILE_EXCLUDE"], outtempfolder, dict_len, 55)
         num_lines = 0
         with open(tempkeepregion) as f:
             for line in f:
@@ -771,6 +832,26 @@ def prepare_data(dict_option, outtempfolder, logger):
             exit(-1)
 
         combinedbamname = gen_keep_regions_sort_bam(combinedbamname, tempkeepregion, os.path.join(outtempfolder,"combined.filtered"))
+    elif os.path.exists(dict_option["GFF_FILE_INCLUDE"]):
+        write_formatted_string_withtime("GFF_FILE_INCLUDE specified, removing reads that are not overlap with features in the GFF file.", 30, sys.stdout)
+        if logger:
+            logger.info("GFF_FILE_INCLUDE specified, removing reads that are not overlap with features in the GFF file.")
+
+        tempkeepregion = gen_keep_regions_from_include_gff(dict_option["GFF_FILE_INCLUDE"], outtempfolder,  55)
+        num_lines = 0
+        with open(tempkeepregion) as f:
+            for line in f:
+                num_lines += 1
+                if num_lines > 5:
+                    break
+        if num_lines==0:
+            write_formatted_string_withtime("!!! No regions in the GFF_FILE_INCLUDE file or all regions are shorter than 55, stop analyze!", 30, sys.stdout)
+            if logger:
+                logger.info("!!! No regions in the GFF_FILE_INCLUDE file or all regions are shorter than 55, stop analyze!")
+            exit(-1)
+
+        combinedbamname = gen_keep_regions_sort_bam(combinedbamname, tempkeepregion, os.path.join(outtempfolder,"combined.filtered"))
+
     else:
         combinedbamname = sort_index_bam(combinedbamname, os.path.join(outtempfolder,"combined.filtered"))
 
@@ -1116,6 +1197,7 @@ def dump_loci_seqs_and_alignment(dict_loci, sortedbamname, fastaname, outputseqp
 def dump_loci_seqs_and_alignment_multiprocess(dict_loci, piece_info_list,
                                               sortedbamname, fastaname,
                                               outputseqprefix, outputalnprefix,
+                                              min_mature_depth,
                                               logger):
     def dump_piece(dict_loci, piece_info_list,sortedbamname, fastaname,
                    outputfastaname, outputalnname, queue):
@@ -1171,30 +1253,49 @@ def dump_loci_seqs_and_alignment_multiprocess(dict_loci, piece_info_list,
                     if len(strands) == 1:
                         cur_strand = "+"
                         if "+" in strands:
-                            seqtag = ">"+regionpos+" + "+ loci_pos + extendregiontag + otherinfo+"\n"  # >ExtendRegion strand loci 0/L/R peaks
+                            seqtag = ">"+regionpos+" + "+ loci_pos + extendregiontag + otherinfo  # >ExtendRegion strand loci 0/L/R peaks
                             dump_key = [seqid, (extendregion[0][0],extendregion[0][1]), "+"]
                         else:
                             cur_strand = "-"
-                            seqtag = ">"+regionpos+" - "+ loci_pos + extendregiontag + otherinfo+"\n"
+                            seqtag = ">"+regionpos+" - "+ loci_pos + extendregiontag + otherinfo
                             dump_key = [seqid, (extendregion[0][0],extendregion[0][1]), "-"]
                             seq = get_reverse_complement(seq)
-                        fout.write(seqtag)
-                        fout.write(seq+"\n")
-                        num_seq += 1
+
                         alignments = samtools_view_region(sortedbamname, seqid,
                                                           extendregion[0][0],
                                                           extendregion[0][1])
                         dict_loci_info = gen_loci_alignment_info(alignments, seqid, extendregion)
-                        matures = gen_possible_matures_loci(dict_loci_info, extendregion, cur_strand)
+                        matures = gen_possible_matures_loci(dict_loci_info, extendregion, cur_strand, min_mature_depth)
                         cPickle.dump([dump_key, extendregiontag.strip(), dict_loci_info, matures], foutdump, protocol=2)
+                        for m in matures:
+                            seqtag += " " + "M:" + str(m[0])+"-"+str(m[1]) + "/" + str(m[2]) + "/" + str(m[3])
+                        seqtag += "\n"
+                        fout.write(seqtag)
+                        fout.write(seq+"\n")
+                        num_seq += 1
                         continue
                     if len(strands) == 2:  # this region has peaks on both strands, generate precursors for each strand
+                        alignments = samtools_view_region(sortedbamname, seqid,
+                                                          extendregion[0][0],
+                                                          extendregion[0][1])
+                        dict_loci_info = gen_loci_alignment_info(alignments, seqid, extendregion)
+                        matures_plus = gen_possible_matures_loci(dict_loci_info, extendregion, "+", min_mature_depth)
+                        dump_key = [seqid, (extendregion[0][0],extendregion[0][1]), "+"]
+                        plus_dumpinfo.append([dump_key, extendregiontag.strip(), dict_loci_info, matures_plus])
+                        matures_minus = gen_possible_matures_loci(dict_loci_info, extendregion, "-", min_mature_depth)
+                        dump_key = [seqid, (extendregion[0][0],extendregion[0][1]), "-"]
+                        minus_dumpinfo.append([dump_key, extendregiontag.strip(), dict_loci_info, matures_minus])
+
                         otherinfo_plus = ""
                         for peak in extendregion[1]:
                             if peak[2] == "+":
                                 otherinfo_plus = otherinfo_plus + str(peak[0])+","+str(peak[1])+","+str(peak[2])+";"
                         otherinfo_plus = otherinfo_plus.rstrip(";")
-                        seqtag = ">"+regionpos+" + "+ loci_pos + extendregiontag + otherinfo_plus+"\n"
+                        seqtag = ">"+regionpos+" + "+ loci_pos + extendregiontag + otherinfo_plus
+                        for m in matures_plus:
+                            seqtag += " " + "M:" + str(m[0])+"-"+str(m[1]) + "/" + str(m[2]) + "/" + str(m[3])
+                        seqtag += "\n"
+
                         plus_tag.append(seqtag)
                         plus_seq.append(seq)
                         num_seq += 1
@@ -1203,21 +1304,15 @@ def dump_loci_seqs_and_alignment_multiprocess(dict_loci, piece_info_list,
                             if peak[2] == "-":
                                 otherinfo_minus = otherinfo_minus + str(peak[0])+","+str(peak[1])+","+str(peak[2])+";"
                         otherinfo_minus = otherinfo_minus.rstrip(";")
-                        seqtag = ">"+regionpos+" - "+ loci_pos + extendregiontag + otherinfo_minus+"\n"
+                        seqtag = ">"+regionpos+" - "+ loci_pos + extendregiontag + otherinfo_minus
+                        for m in matures_minus:
+                            seqtag += " " + "M:" + str(m[0])+"-"+str(m[1]) + "/" + str(m[2]) + "/" + str(m[3])
+                        seqtag += "\n"
                         seq = get_reverse_complement(seq)
                         minus_tag.append(seqtag)
                         minus_seq.append(seq)
                         num_seq += 1
-                        alignments = samtools_view_region(sortedbamname, seqid,
-                                                          extendregion[0][0],
-                                                          extendregion[0][1])
-                        dict_loci_info = gen_loci_alignment_info(alignments, seqid, extendregion)
-                        matures_plus = gen_possible_matures_loci(dict_loci_info, extendregion, "+")
-                        dump_key = [seqid, (extendregion[0][0],extendregion[0][1]), "+"]
-                        plus_dumpinfo.append([dump_key, extendregiontag.strip(), dict_loci_info, matures_plus])
-                        matures_minus = gen_possible_matures_loci(dict_loci_info, extendregion, "-")
-                        dump_key = [seqid, (extendregion[0][0],extendregion[0][1]), "-"]
-                        minus_dumpinfo.append([dump_key, extendregiontag.strip(), dict_loci_info, matures_minus])
+
                         if len(plus_tag):
                             for which, tag in enumerate(plus_tag):
                                 fout.write(tag)
@@ -1327,12 +1422,13 @@ def gen_candidate_region_typeA(dict_contigs, dict_len, dict_option, tmpdir,
                 rightend = seqlen
             return [(leftstart, leftend), (rightstart, rightend)]
         else:
-            left = region[0] - 25
-            right = region[1] + 25
+            extend_both_side = (max_transcript - length) / 2
+            left = region[0] - extend_both_side
+            right = region[1] + extend_both_side
             if left < 0:
-                left = 0
+                left = 1
             if right > seqlen:
-                right = seqlen
+                right = seqlen + 1
             return [(left, right)]
 
     dict_loci = {}
@@ -1446,10 +1542,20 @@ def gen_loci_alignment_info(alignments, seqid, loci):
     # reads that start from this position. length1, length2,..lengthN: the
     # lengths of reads starts from this position.
     # total-count = count1 + count2 + ... + countN
-    # dict_pos_info = {"+":[[0, 0, 0],[]],
-    #                   "-":[[0, 0, 0],[]]
+    # dict_pos_info = {"+": total count
+    #                   "-":total cound
+    #                   0: {dict_map}
     # }
+    # dict_map = { pos1: {dict_strand}
+    #             ....
+    #             posn: {dict_strand}
+    #}
+    # dict_strand = { '+': [max_depth_list, [pos_info, ..., pos_info]]
+    # }
+    # max_depth_list = [readlen, this_depth, total_depth]
+    # pos_info = [readlen, depth]
     # key is position, value is a dict_pos_info
+
     dict_loci_info = {"+": 0, # total reads count of plus
                       "-": 0, # total reads count of plus
                       0: {} # detailed reads info
@@ -1494,23 +1600,43 @@ def gen_loci_alignment_info(alignments, seqid, loci):
     return dict_loci_info
 
 
-def gen_possible_matures_loci(dict_loci_info, loci, strand):
+def gen_possible_matures_loci(dict_loci_info, loci, strand, min_mature_depth):
+    def gen_matures_one_peak(max_num_mature, min_mature_depth, peak_start, peak_end):
+        matures = []
+        higest = (0, 0, 0, 0)
+        for pos in xrange(peak_start, peak_end):
+            if pos in dict_loci_info[0]:
+                if strand in dict_loci_info[0][pos]:
+                    if dict_loci_info[0][pos][strand][0][1] > higest[3]:
+                        higest = (pos, pos+dict_loci_info[0][pos][strand][0][0], strand, dict_loci_info[0][pos][strand][0][1])
+                    if dict_loci_info[0][pos][strand][0][1] > min_mature_depth:
+                        if len(matures) < max_num_mature:
+                            matures.append((pos, pos+dict_loci_info[0][pos][strand][0][0], strand, dict_loci_info[0][pos][strand][0][1]))
+                        elif dict_loci_info[0][pos][strand][0][1] > matures[-1][-1]:
+                            matures[-1] = (pos, pos+dict_loci_info[0][pos][strand][0][0], strand, dict_loci_info[0][pos][strand][0][1])
+                        matures.sort(key=lambda x: x[2], reverse=True)
+        if not matures:
+            matures.append(higest)
+        return matures
+
     ret_matures = []
     for start, end, curstrand in loci[1]:
         if curstrand != strand:
             continue
-        mature_depth = 0
-        mature_length = 0
-        mature_pos = 0
-        for pos in xrange(start,end):
-            if pos in dict_loci_info[0]:
-                if strand in dict_loci_info[0][pos]:
-                    if dict_loci_info[0][pos][strand][0][1] > mature_depth:
-                        mature_depth = dict_loci_info[0][pos][strand][0][1]
-                        mature_length = dict_loci_info[0][pos][strand][0][0]
-                        mature_pos = pos
-        mature = (mature_pos, mature_pos+mature_length, strand, mature_depth)
-        ret_matures.append(mature)
+        # mature_depth = 0
+        # mature_length = 0
+        # mature_pos = 0
+        # for pos in xrange(start,end):
+        #     if pos in dict_loci_info[0]:
+        #         if strand in dict_loci_info[0][pos]:
+        #             if dict_loci_info[0][pos][strand][0][1] > mature_depth:
+        #                 mature_depth = dict_loci_info[0][pos][strand][0][1]
+        #                 mature_length = dict_loci_info[0][pos][strand][0][0]
+        #                 mature_pos = pos
+        # mature = (mature_pos, mature_pos+mature_length, strand, mature_depth)
+        #ret_matures.append(mature)
+        matures = gen_matures_one_peak(2, min_mature_depth, start, end)
+        ret_matures.extend(matures)
     return ret_matures
 
 
@@ -1545,8 +1671,8 @@ def test_mature_region(dict_loci, dict_option, sortedbamname, outputname):
 def get_structures_next_extendregion(rnalfoldoutname, minlen,
                                      minloop=3):
     '''
-    Parse the RNALfold output file, return a list of (0/L/R, structure,
-    norm_energy) tuples for an extend region each time (generator).
+    Parse the RNALfold output file, return a tuple of (0/L/R, peak region, [
+    norm_energy, fold_start, ss, sstype]) for an extend region each time (generator).
 
     Structure whose length is shorter than minlen are filtered.
 
@@ -1555,6 +1681,7 @@ def get_structures_next_extendregion(rnalfoldoutname, minlen,
     energypattern = re.compile(r'\(\s*(-?[0-9]+[\.]?[0-9]*)\s*\)')
     structures = []
     which = 0
+    peak = ''
     first = True
     sp=[]
     with open(rnalfoldoutname) as f:
@@ -1562,9 +1689,10 @@ def get_structures_next_extendregion(rnalfoldoutname, minlen,
             sp = line.strip().split()
             if line.startswith(">"):
                 if not first:
-                    yield (which, structures)
+                    yield (which, peak, structures)
                 structures = []
                 which = sp[3]  # 0, L, or R
+                peak = sp[2]
                 first = False
             else:
                 if len(sp) >=3:  # structure line
@@ -1598,7 +1726,7 @@ def get_structures_next_extendregion(rnalfoldoutname, minlen,
                         #         sstype = -1
                 else:
                     continue
-        yield (which, structures)
+        yield (which, peak, structures)
 
 
 def is_stem_loop(ss, minloopsize):
@@ -1850,7 +1978,7 @@ def stat_duplex(mature, star):
 def pass_stat_duplex(loops, bulges):
     total = len(loops) + len(bulges)
     if total > 5:
-        return False
+        return ["FAIL_STRUCTURE_TOO_MANY_BULGE_OR_LOOP", False]
     num_loop_bigger_than_three = 0
     num_bulge_bigger_than_three = 0
     totalloopsize = 0
@@ -1867,12 +1995,12 @@ def pass_stat_duplex(loops, bulges):
     #if num_loop_bigger_than_three >1 or num_bulge_bigger_than_three >0:
     #    return False
     if max_bulge >2:  # maxmium bulge size is bigger than 2
-        return False
+        return ["FAIL_STRUCTURE_MAX_BULGE_LARGE_THAN_2", False]
     if totalloopsize >5:  # total loop size bigger than 5. >=5???
-        return False
+        return ["FAIL_STRUCTURE_TOTAL_LOOP_SIZE_LARGER_THAN_5", False]
     if len(bulges) > 2:  #number of bulges is bigger than 2
-        return False
-    return True
+        return ["FAIL_STRUCTURE_NUM_BULGE_MORE_THAN_2", False]
+    return [None, True]
 
 
 def get_maturestar_info(ss, mature, foldstart, foldend, regionstart, regionend,
@@ -1891,7 +2019,7 @@ def get_maturestar_info(ss, mature, foldstart, foldend, regionstart, regionend,
             stack.append(idx)
         if char == ")":
             if len(stack) == 0:
-                return None
+                return "FAIL_STRUCTURE_MATCHED_BASES"
             dict_bp[idx] = stack[-1]
             dict_bp[stack[-1]] = idx
             stack.pop()
@@ -1905,15 +2033,15 @@ def get_maturestar_info(ss, mature, foldstart, foldend, regionstart, regionend,
                                           foldend)
     # mature not in the fold region
     if not (mature[0]>=foldregion_genome[0] and mature[1]<=foldregion_genome[1]):
-        return None
+        return "FAIL_STRUCTURE_MATURE_NOT_IN_FOLD_REGION"
 
     mature_ss = ss[mature_local_pos[0]:mature_local_pos[1]]
     #  Not in a arm of a stem, return None. This should not happen given
     #  that the mature is already in an arm of a stem.
     if mature_ss.find("(")!=-1 and mature_ss.find(")")!=-1:
-        return None
+        return "FAIL_STRUCTURE_MATURE_NOT_IN_ONE_ARM"
     if len(mature_ss) - mature_ss.count(".") <14:
-        return None
+        return "FAIL_STRUCTURE_MATURE_MATCH_SMALL_THAN_14"
 
 
     #  local positions
@@ -1931,7 +2059,7 @@ def get_maturestar_info(ss, mature, foldstart, foldend, regionstart, regionend,
         prime5 = False
         mature_sym = ")"
     if firstbp == -1:  # all are dots
-        return None
+        return "FAIL_STRUCTURE_MATURE_MATCH_SMALL_THAN_14"
 
     start_unpaired_len = mature_local_pos[1]-1-lastbp
     end_unpaired_len = firstbp-mature_local_pos[0]
@@ -1941,14 +2069,16 @@ def get_maturestar_info(ss, mature, foldstart, foldend, regionstart, regionend,
     #mature and star could overlap...
     if mature_local_pos[0] <= star_start:
         if star_start - mature_local_pos[1] < 3:
-            return None
+            return "FAIL_STRUCTURE_MATURE_STAR_OVERLAP"
         if star_end > len(ss):
-            return None
+            return "FAIL_STRUCTURE_STAR_OUT_OF_FOLD_REGION"
+
     if star_start <= mature_local_pos[0]:
         if mature_local_pos[0] - star_end<3:
-            return None
+            return "FAIL_STRUCTURE_MATURE_STAR_OVERLAP"
         if star_start < 0:
-            return None
+            return "FAIL_STRUCTURE_STAR_OUT_OF_FOLD_REGION"
+
     mend = ss.rfind(mature_sym, mature_local_pos[0], mature_local_pos[1]-2)
     sstart = dict_bp[mend]
     send = dict_bp[firstbp]
@@ -1958,7 +2088,7 @@ def get_maturestar_info(ss, mature, foldstart, foldend, regionstart, regionend,
     total_dots = mature_duplex.count(".") + star_duplex.count(".")
     total_bps = len(mature_duplex) - mature_duplex.count(".")
     if total_bps<14:
-        return None
+        return "FAIL_STRUCTURE_MATURE_MATCH_SMALL_THAN_14"
 
     # if prime5:  # the mature is on 5' arm
     #     print("5PRIME")
@@ -1975,10 +2105,11 @@ def get_maturestar_info(ss, mature, foldstart, foldend, regionstart, regionend,
     #     star_end = dict_bp[firstbp] + end_unpaired_len + 2 + 1
     star_ss = ss[star_start: star_end]
     if star_ss.find("(") != -1 and star_ss.find(")")!= -1:  # this could happen if the input ss in not a stem loop
-        return None
+        return "FAIL_STRUCTURE_STAR_NOT_IN_ONE_ARM"
     loops, bulges = stat_duplex(mature_duplex, star_duplex)
-    if not pass_stat_duplex(loops, bulges):
-        return None
+    pass_stat = pass_stat_duplex(loops, bulges)
+    if not pass_stat[1]:
+        return pass_stat[0]
     # convert local positions to genome positions.
     genome_star_start, genome_star_end = pos_local_2_genome(star_start,
                                                              star_end,
@@ -1998,6 +2129,170 @@ def get_maturestar_info(ss, mature, foldstart, foldend, regionstart, regionend,
     return genome_star_start, genome_star_end, foldregion_genome[0], foldregion_genome[1], star_ss, prime5, mature_ss, total_dots, total_bps
 
 
+def gen_mapinfo_each_sample(combinedsortedbamname, samplenames, chromID, start, end):
+    # start and end are one based.
+    dict_map_info = {}
+    for sample in samplenames:
+        dict_map_info[sample] = {"+" : {},
+                                 "-" : {}
+        }
+    #SAM file and bam file (if accessed using samtools) are 1 based.
+    alignments = samtools_view_region(combinedsortedbamname, chromID, start,
+                                      end-1)
+    for aln in alignments:
+        sp = aln.split()
+        startpos =0
+        readlen = 0
+        try:  # skip unmapped alignment
+            startpos = int(sp[3])
+            readlen = len(sp[9])
+        except ValueError:
+            continue
+        if startpos < start or startpos+readlen > end:
+            continue
+        depth = int(get_read_depth_fromID_as_string(sp[0]))
+        read_sample = "_".join(sp[0].split("_")[:-2]).strip(">")  # sample name could contain "_"
+        aln_strand = "+"
+        if int(sp[1]) & 16:  # on minus strand
+            aln_strand = "-"
+        if startpos not in dict_map_info[read_sample][aln_strand]:
+            dict_map_info[read_sample][aln_strand][startpos] = []
+        dict_map_info[read_sample][aln_strand][startpos].append((sp[9], depth))
+    return dict_map_info
+
+
+#def check_expression_new(dict_map_info, combinedsortedbamname, samplenames, chromID, start,
+#                         end, maturepos_genome, mature_depth,
+#                         starpos_genome, strand, allow_3nt_overhang):
+def check_expression_new(dict_map_info, samplenames, start,
+                         end, maturepos_genome, mature_depth,
+                         starpos_genome, strand, allow_3nt_overhang):
+    # position in dict_map_info are 1 based. All others are zero based.
+    dict_info = {}
+    mature_len = maturepos_genome[1] - maturepos_genome[0]
+    star_len = starpos_genome[1] - starpos_genome[0]
+    pre_len = end - start
+    dict_info['samplenames'] = samplenames
+    for sample in samplenames:
+        dict_info[sample] = {}
+        dict_info[sample]['reads_pre'] = 0  # number of reads mapped to the precursor region (on the same strand as the locus)
+        dict_info[sample]['reads_mature'] = 0  # number of reads mapped exactly to the mature seq (on the same strand as the locus)
+        dict_info[sample]['reads_star'] = 0  # number of reads mapped exactly to the star seq (on the same strand as the locus)
+        dict_info[sample]['reads_antisense'] = 0  # number of reads mapped to the antisense of the locus.
+        dict_info[sample]['reads_maps'] = {}  # reads starts from each position. key: position, value: a list of (readseq, count)
+        dict_info[sample]['reads_mature_isoform'] = 0  # possible isoform
+        dict_info[sample]['reads_mature_inside'] = 0
+        dict_info[sample]['bases_with_reads_start'] = 0
+        #dict_info[sample]['bases_with_read_coverage'] = [0] * precursor
+        # the following entries are for imperfect star sequences. The three
+        # values are for star sequence at [star_start, star_end+1],
+        # [star_start+1, star_end+1], and [star_start+1, star_end]
+        if allow_3nt_overhang:
+            dict_info[sample]['reads_star_imperfect'] = [0, 0, 0]
+
+    for aln_strand in ['+', '-']:
+        for startpos in range(start, end):
+            for read_sample in dict_map_info:
+                if (startpos) in dict_map_info[read_sample][aln_strand]:
+                    if strand == aln_strand:
+                        dict_info[sample]['bases_with_reads_start'] += 1
+                    for read, depth in dict_map_info[read_sample][aln_strand][startpos]:
+                        if strand != aln_strand:
+                            dict_info[read_sample]['reads_antisense'] = dict_info[read_sample]['reads_antisense'] + depth
+                            continue
+                        else:
+                            dict_info[read_sample]['reads_pre'] = dict_info[read_sample]['reads_pre'] + depth
+
+                        if startpos in dict_info[read_sample]['reads_maps']:
+                            dict_info[read_sample]['reads_maps'][startpos].append((read,depth))
+                        else:
+                            dict_info[read_sample]['reads_maps'][startpos]= [(read,depth)]
+                        readlen = len(read)
+                        if (startpos==maturepos_genome[0]) and (readlen==(mature_len)):
+                            dict_info[read_sample]['reads_mature'] = dict_info[read_sample]['reads_mature'] + depth
+                        if (startpos==starpos_genome[0]) and (readlen==star_len):
+                            dict_info[read_sample]['reads_star'] = dict_info[read_sample]['reads_star'] + depth
+                        if (abs(startpos-maturepos_genome[0]) <=3) and (abs(readlen-mature_len) <=3):
+                            dict_info[read_sample]['reads_mature_isoform'] = dict_info[read_sample]['reads_mature_isoform'] + depth
+                        if (startpos>=maturepos_genome[0]) and (startpos+readlen <= maturepos_genome[1]):
+                            dict_info[read_sample]['reads_mature_inside'] = dict_info[read_sample]['reads_mature_inside'] + depth
+
+                        if allow_3nt_overhang:
+                            if (startpos==starpos_genome[0]) and (readlen==star_len+1): # 2, 3
+                                dict_info[read_sample]['reads_star_imperfect'][0] = dict_info[read_sample]['reads_star_imperfect'][0] + depth
+                            elif (startpos-1==starpos_genome[0]) and (readlen==star_len-1): # 3, 2
+                                dict_info[read_sample]['reads_star_imperfect'][1] = dict_info[read_sample]['reads_star_imperfect'][1] + depth
+                            elif (startpos-1==starpos_genome[0]) and (readlen==star_len): # 3, 3
+                                dict_info[read_sample]['reads_star_imperfect'][2] = dict_info[read_sample]['reads_star_imperfect'][2] + depth
+    total_depth_just_this_strand = 0
+    total_depth_anti = 0
+    total_depth_mature = 0
+    total_depth_isoform = 0
+    total_depth_star = 0
+    mature_depth_each_sample = []
+    total_depth_imperfect_star = [0, 0, 0]
+    for sample in samplenames:
+        total_depth_just_this_strand += dict_info[sample]['reads_pre']
+        total_depth_anti += dict_info[sample]['reads_antisense']
+        total_depth_mature += dict_info[sample]['reads_mature']
+        total_depth_isoform += dict_info[sample]['reads_mature_isoform']
+        mature_depth_each_sample.append(dict_info[sample]['reads_mature'])
+        total_depth_star += dict_info[sample]['reads_star']
+        if allow_3nt_overhang:
+            for i in range(3):
+                total_depth_imperfect_star[i] +=dict_info[sample]['reads_star_imperfect'][i]
+        dict_info[sample]['ratio_bases_with_reads_start'] = float(dict_info[sample]['bases_with_reads_start']) / pre_len
+
+    dict_info['total_depth_just_this_strand'] = total_depth_just_this_strand
+    dict_info['total_depth_anti'] = total_depth_anti
+    dict_info['total_depth_mature'] = total_depth_mature
+    dict_info['total_depth_isoform'] = total_depth_isoform
+    dict_info['total_depth_star'] = total_depth_star
+    dict_info['total_depth_imperfect_star'] = total_depth_imperfect_star
+    dict_info['mature_depth_each_sample'] = mature_depth_each_sample
+    if starpos_genome[0] > maturepos_genome[1]:
+        dict_info['mature_star_distance'] = starpos_genome[0] - maturepos_genome[1]
+    else:
+        dict_info['mature_star_distance'] = maturepos_genome[0] - starpos_genome[1]
+
+    def get_imperfect_star_pos():
+        max_imperfect_star = max(total_depth_imperfect_star)
+        if max_imperfect_star == 0:
+            return (-1, 0, 0, 0)
+        which = 0
+        for i in range(len(total_depth_imperfect_star)):
+            if max_imperfect_star == total_depth_imperfect_star[i]:
+                which = i
+                break
+        if which == 0:
+            return (which, max_imperfect_star, starpos_genome[0], starpos_genome[1]+1)
+        if which == 1:
+            return (which, max_imperfect_star, starpos_genome[0]+1, starpos_genome[1])
+        if which == 2:
+            return (which, max_imperfect_star, starpos_genome[0]+1, starpos_genome[1]+1)
+
+
+    max_imperfect_star = 0
+    if total_depth_star == 0 and allow_3nt_overhang:
+        which, max_imperfect_star, star_start, star_end = get_imperfect_star_pos()
+        if which == -1:
+            dict_info['imperfect_star_start'] = star_start
+            dict_info['max_imperfect_star'] = max_imperfect_star
+        else:
+            dict_info['imperfect_star_start'] = star_start
+            dict_info['imperfect_star_end'] = star_end
+            dict_info['max_imperfect_star'] = max_imperfect_star
+            dict_info['imperfect_star_which'] = which
+    mature_star_ratio_tatal =  float(total_depth_mature + max(total_depth_star, max_imperfect_star)) / total_depth_just_this_strand
+    dict_info['mature_star_ratio_total'] = mature_star_ratio_tatal
+    mature_star_ratio_tatal_both_strand =  float(total_depth_mature + max(total_depth_star, max_imperfect_star)) / (total_depth_just_this_strand + total_depth_anti)
+    dict_info['mature_star_ratio_total_both_strand'] = mature_star_ratio_tatal_both_strand
+    dict_info['mature_iso_star_ratio_total'] = float(total_depth_isoform + max(total_depth_star, max_imperfect_star)) / total_depth_just_this_strand
+    if 'max_imperfect_star' in dict_info:
+        dict_info['total_depth_star'] = max( total_depth_star, max_imperfect_star)
+    return dict_info
+
+
 def check_expression(ss, dict_extendregion_info, maturepos_genome, mature_depth, starpos_genome, strand):
     '''
     starpos_genome is the genome coordinate of the star sequence position.
@@ -2011,8 +2306,8 @@ def check_expression(ss, dict_extendregion_info, maturepos_genome, mature_depth,
     star_depth = 0
     mature_isoform_depth = 0
     all_depth = []
-    for pos in dict_extendregion_info[0]:
-        for s in dict_extendregion_info[0][pos]:
+    for pos in dict_extendregion_info[0]: # for each position
+        for s in dict_extendregion_info[0][pos]: # for both strands
             total_depth += dict_extendregion_info[0][pos][s][0][-1]  # total depth on both strand?
             all_depth.append(dict_extendregion_info[0][pos][s][0][-1])
     if starpos_genome[0] not in dict_extendregion_info[0]:
@@ -2038,57 +2333,157 @@ def check_expression(ss, dict_extendregion_info, maturepos_genome, mature_depth,
     return star_depth, ratio, total_depth, ratio_matureisoform, all_depth
 
 
-def check_loci(structures, matures, region, dict_aln, which):
+def check_loci(structures, matures, region, dict_mapinfo_region, which,
+               samplenames, allow_3nt_overhang, allow_no_star, min_mature_len,
+               max_mature_len, peak_depth):
+    # This function returns either the list 'miRNAs' or the
+    # dict 'dict_why_not_miRNA_reasons'
     miRNAs = []
+    # record the reason why a region is not predicted as a miRNA.
+    # Only the first reason is recorded. For example, it's possible that
+    # a region do not have stem-loop structure and not good expression pattern,
+    # in this case only NO_STEM_LOOP is recorded because we check this first.
+    dict_why_not_miRNA_reasons = {}
     #import pdb; pdb.set_trace();
+    key = tuple(region)
+    dict_why_not_miRNA_reasons[key] = {}
+    dict_why_not_miRNA_reasons[key]['PEAK_PASS_DEPTH'] = "PASSED"
+    # no stem loop structure found for this region
+    if not structures[1]:
+        dict_why_not_miRNA_reasons[key]['HAS_STEMLOOP_STRUCTURE'] = 'FAILED'
+        return dict_why_not_miRNA_reasons
+    else:
+        dict_why_not_miRNA_reasons[key]['HAS_STEMLOOP_STRUCTURE'] = 'PASSED'
+
+    num_matures = len(matures)
+    num_matures_out_region = 0
     for m0, m1, strand, mdepth in matures:
+        if m1-m0 < min_mature_len or m1-m0 > max_mature_len:
+            num_matures_out_region += 1
+    # sizes of all matures are out of bounds
+    if num_matures_out_region == num_matures:
+        dict_why_not_miRNA_reasons[key]['HAS_MATURE_SIZE_IN_RANGE'] = 'FAILED'
+        return dict_why_not_miRNA_reasons
+    else:
+        dict_why_not_miRNA_reasons[key]['HAS_MATURE_SIZE_IN_RANGE'] = 'PASSED'
+
+
+    for m0, m1, strand, mdepth in sorted(matures, key=lambda m: m[3], reverse=True):
         # TODO Move this if to previous stage.
         # if mature length is not in [18-24], then ignore this
-        if m1-m0 <18 or m1-m0>23:
+        if m1-m0 < min_mature_len or m1-m0 > max_mature_len:
             continue
         lowest_energy = 0
         lowest_energy = 0
         outputinfo = []
+
         for energy, foldstart, ss, sstype in structures[1]:
             if energy > lowest_energy:
                 continue
             else:
+                #key = (tuple(region), m0, m1, strand, mdepth, ss, sstype)
+                key1 = (m0, m1, strand, ss)
+                dict_why_not_miRNA_reasons[key][key1] = {}
                 structinfo = get_maturestar_info(ss, (m0,m1), foldstart,
                                                  foldstart+len(ss),
                                                  region[1][0],
                                                  region[1][1],
                                                  strand)
-                if structinfo:
-                    exprinfo = check_expression(ss,dict_aln, (m0,m1),
-                                                mdepth,
-                                                (structinfo[0],structinfo[1]),
-                                                strand)
-                    if exprinfo[0]>0:  # has star expression
-                        if exprinfo[1] < 0.1:
+                if isinstance(structinfo, str): # failed
+                    dict_why_not_miRNA_reasons[key][key1][structinfo] = "FAILED"
+                else:
+                    #exprinfo = check_expression(ss,dict_aln, (m0,m1),
+                    #                            mdepth,
+                    #                            (structinfo[0],structinfo[1]),
+                    #                            strand)
+                    exprinfo = check_expression_new(dict_mapinfo_region,
+                                                    samplenames,
+                                                    structinfo[2],
+                                                    structinfo[3],
+                                                    (m0, m1),
+                                                    mdepth,
+                                                    (structinfo[0], structinfo[1]),
+                                                    strand,
+                                                    allow_3nt_overhang
+                                                 )
+                    if exprinfo['mature_star_distance'] <= 4:
+                           dict_why_not_miRNA_reasons[key][key1]["FAIL_EXPRESS_PATTERN_MATURE_STAR_TOO_CLOSE"] = "FAILED"
+                           dict_why_not_miRNA_reasons[key][key1]['ss_info'] = [region[0], structinfo[2],
+                                                                               structinfo[3], m0, m1, structinfo[0],
+                                                                               structinfo[1], ss, strand, True, exprinfo]
+                           continue
+                    if exprinfo['total_depth_star'] > 0:  # has star expression
+                        if exprinfo['mature_star_ratio_total'] < 0.2:
+                            dict_why_not_miRNA_reasons[key][key1]["FAIL_EXPRESS_PATTERN_HAS_STAR_BUT_TOO_FEW_READS_MAPPED_TO_DUPLEX"] = "FAILED"
+                            dict_why_not_miRNA_reasons[key][key1]['ss_info'] = [region[0], structinfo[2],
+                                                                                structinfo[3], m0, m1, structinfo[0],
+                                                                                structinfo[1], ss, strand, True, exprinfo]
                             continue
                         else:
                             #  The last 'True' means this is an confident miRNA
+                            # regionID, fold start, fold end, mature start, mature end, star start,
+                            # star end, ss, strand, has_star
                             outputinfo = [region[0], structinfo[2],
                                           structinfo[3], m0, m1, structinfo[0],
-                                          structinfo[1], ss, strand, True]
+                                          structinfo[1], ss, strand, True, exprinfo]
+                            if 'max_imperfect_star' in exprinfo:
+                                outputinfo[5] = exprinfo['imperfect_star_start']
+                                outputinfo[6] = exprinfo['imperfect_star_end']
                             lowest_energy = energy
                     else:  #  no star expression
-                        if exprinfo[3] >=0.8 and exprinfo[2] > 1000:  # but very high expression
-                            if min(exprinfo[4]) < 100:
-                                continue
-                            #  The last 'False' means this is not an confident miRNA
+                        if not allow_no_star:
+                            dict_why_not_miRNA_reasons[key][key1]['FAIL_EXPRESS_PATTERN_NO_STAR_EXPRESSION_DISALLOW_NO_STAR'] = "FAILED"
+                            dict_why_not_miRNA_reasons[key][key1]['ss_info'] = [region[0], structinfo[2],
+                                                                                structinfo[3], m0, m1, structinfo[0],
+                                                                                structinfo[1], ss, strand, False, exprinfo]
+                            dict_why_not_miRNA_reasons[key][key1]['expression_info'] = exprinfo
+                            continue
+                        too_many_start = False
+                        for sample in samplenames:
+                            if exprinfo[sample]['ratio_bases_with_reads_start'] > 0.5:
+                                too_many_start = True
+                        if too_many_start:
+                            dict_why_not_miRNA_reasons[key][key1]['FAIL_EXPRESS_PATTERN_NO_STAR_EXPRESSION_TOO_MANY_START'] = "FAILED"
+                            dict_why_not_miRNA_reasons[key][key1]['ss_info'] = [region[0], structinfo[2],
+                                                                                structinfo[3], m0, m1, structinfo[0],
+                                                                                structinfo[1], ss, strand, False, exprinfo]
+                            dict_why_not_miRNA_reasons[key][key1]['expression_info'] = exprinfo
+                            continue
+                        expressed_sample = len([x for x in exprinfo['mature_depth_each_sample'] if x > 0])
+                        expressed_all = False
+                        if expressed_sample == len(exprinfo['mature_depth_each_sample']):
+                            expressed_all = True
+                        if exprinfo['mature_iso_star_ratio_total'] >= 0.8 and (expressed_all or exprinfo['total_depth_mature'] >= 1000):
                             outputinfo = [region[0], structinfo[2],
                                           structinfo[3], m0, m1, structinfo[0],
-                                          structinfo[1], ss, strand, False]
+                                          structinfo[1], ss, strand, False, exprinfo]
                             lowest_energy = energy
+                        else:
+                            if exprinfo['mature_iso_star_ratio_total'] < 0.8:
+                                dict_why_not_miRNA_reasons[key][key1]['FAIL_EXPRESS_PATTERN_NO_STAR_MATURE_STAR_RATIO_TOO_SMALL'] = "FAILED"
+                            if exprinfo['total_depth_mature'] <= 100:
+                                dict_why_not_miRNA_reasons[key][key1]['FAIL_EXPRESS_PATTERN_NO_STAR_MATURE_DEPTH_TOO_SMALL'] = "FAILED"
+                            if not expressed_all:
+                                dict_why_not_miRNA_reasons[key][key1]['FAIL_EXPRESS_PATTERN_NO_STAR_MATURE_NOT_IN_ALL_SAMPLE'] = "FAILED"
+                            dict_why_not_miRNA_reasons[key][key1]['ss_info'] = [region[0], structinfo[2],
+                                                                                structinfo[3], m0, m1, structinfo[0],
+                                                                                structinfo[1], ss, strand, True, exprinfo]
+                            dict_why_not_miRNA_reasons[key][key1]['expression_info'] = exprinfo
         if outputinfo:  # the loci contains an miRNA
             miRNAs.append(outputinfo)
-    return miRNAs
+    if miRNAs:
+        return miRNAs
+    else:
+        return dict_why_not_miRNA_reasons
 
 
-def filter_next_loci(alndumpname, rnalfoldoutname, minlen=50):
+def filter_next_loci(alndumpname, rnalfoldoutname, combinedsortedbamname,
+                     samplenames, allow_3nt_overhang, allow_no_star,
+                     output_details, min_mature_len, max_mature_len, peak_depth,
+                     minlen=50):
     list_miRNA_loci = []
     alnf = open(alndumpname)
+    # (which, peak region, [energy, fold_start, ss, sstype])
     ss_generator = get_structures_next_extendregion(rnalfoldoutname, minlen)
     while True:
         region = None
@@ -2099,46 +2494,120 @@ def filter_next_loci(alndumpname, rnalfoldoutname, minlen=50):
             region, which, dict_aln, matures = cPickle.load(alnf)
         except EOFError:
             raise StopIteration
+        # position in dict_mapinfo_region, region are all one-based.
+        dict_mapinfo_region = gen_mapinfo_each_sample(combinedsortedbamname,
+                                                      samplenames, region[0],
+                                                      region[1][0], region[1][1]
+                                                  )
         structures = []
         if which == "0": #only one extend region for this loci
             structures = next(ss_generator)
-            miRNAs = check_loci(structures, matures, region, dict_aln, which)
-            if miRNAs:
-                yield miRNAs
+            peak = structures[1]
+            which_and_ss = (structures[0], structures[2])
+            # all positions are one based.
+            miRNAs = check_loci(which_and_ss, matures, region,
+                                dict_mapinfo_region, which, samplenames,
+                                allow_3nt_overhang,
+                                allow_no_star,
+                                min_mature_len,
+                                max_mature_len,
+                                peak_depth)
+            if isinstance(miRNAs, dict): # not a miRNA
+                if not output_details:
+                    continue
+                miRNAs['which'] = '0'
+                miRNAs['peak'] = peak
+            yield miRNAs
             continue
+
         else:
             structuresL = next(ss_generator)  # L
             structuresR = next(ss_generator)  # R
+            peak = structuresL[1]
+            which_and_ssL = (structuresL[0], structuresL[2])
+            which_and_ssR = (structuresR[0], structuresR[2])
             region1, which1, dict_aln1, matures1 = cPickle.load(alnf)
-            miRNAsL = check_loci(structuresL, matures, region, dict_aln, which)
-            if miRNAsL:
-                yield miRNAsL
-            else:
-                miRNAsR = check_loci(structuresR, matures1, region1, dict_aln1, which1)
-                if miRNAsR:
-                    yield miRNAsR
+            dict_mapinfo_region1 = gen_mapinfo_each_sample(combinedsortedbamname,
+                                                           samplenames, region1[0],
+                                                           region1[1][0], region1[1][1]
+                                                      )
+            miRNAsL = check_loci(which_and_ssL, matures, region,
+                                 dict_mapinfo_region, which,
+                                 samplenames, allow_3nt_overhang,
+                                 allow_no_star,
+                                 min_mature_len,
+                                 max_mature_len,
+                                 peak_depth)
+            if isinstance(miRNAsL, dict):
+                if not output_details:
+                    continue
+                miRNAsL['which'] = 'L'
+                miRNAsL['peak'] = peak
+            yield miRNAsL
+            if isinstance(miRNAsL, dict):
+                miRNAsR = check_loci(which_and_ssR, matures1, region1,
+                                     dict_mapinfo_region1, which1,
+                                     samplenames,allow_3nt_overhang,
+                                     allow_no_star,
+                                     min_mature_len,
+                                     max_mature_len,
+                                     peak_depth
+                                 )
+                if isinstance(miRNAsR, dict):
+                    if not output_details:
+                        continue
+                    miRNAsR['which'] = 'R'
+                    miRNAsR['peak'] = peak
+                yield miRNAsR
                 continue
 
-def gen_miRNA_loci_nopredict(alndumpnames, rnalfoldoutnames, minlen, logger):
 
-    def gen_miRNA_loci_local(queue, alndumpname, rnalfoldoutname, minlen):
+def gen_miRNA_loci_nopredict(alndumpnames, rnalfoldoutnames, combinedsortedbamname, samplenames,
+                             allow_3nt_overhang, allow_no_star, output_details,
+                             min_mature_len, max_mature_len, minlen, peak_depth,
+                             logger):
+
+    def gen_miRNA_loci_local(queue, alndumpname, rnalfoldoutname, minlen,
+                             samplenames, combinedsortedbamname,
+                             allow_3nt_overhang, allow_no_star,
+                             output_details, min_mature_len,
+                             max_mature_len, peak_depth):
         mir_generator = filter_next_loci( alndumpname, rnalfoldoutname,
+                                          combinedsortedbamname,
+                                          samplenames, allow_3nt_overhang,
+                                          allow_no_star,
+                                          output_details,
+                                          min_mature_len,
+                                          max_mature_len,
+                                          peak_depth,
                                           minlen=minlen)
 
         mirnas = []
         for mir in mir_generator:
-            mirnas.append(mir)
+            if isinstance(mir, list):
+                mirnas.append((mir, True))
+            else:
+                mirnas.append((mir, False))
         queue.put(mirnas)
         queue.put("done")
         queue.close()
     miRNAqueue = multiprocessing.Queue()
     jobs = []
     finalresult = []
+    failed_reasons = []
     for i in range(len(alndumpnames)):
-        p = multiprocessing.Process(target = gen_miRNA_loci_local, args=(miRNAqueue, alndumpnames[i], rnalfoldoutnames[i],minlen))
+        p = multiprocessing.Process(target = gen_miRNA_loci_local, args=(
+            miRNAqueue, alndumpnames[i], rnalfoldoutnames[i],minlen,samplenames,
+            combinedsortedbamname,
+            allow_3nt_overhang,
+            allow_no_star,
+            output_details,
+            min_mature_len,
+            max_mature_len,
+            peak_depth
+        ))
         p.start()
         jobs.append(p)
-
     num_joined = 0
     while True:
         try:
@@ -2151,12 +2620,81 @@ def gen_miRNA_loci_nopredict(alndumpnames, rnalfoldoutnames, minlen, logger):
                 num_joined += 1
             else:
                 for mirna in result:
-                    finalresult.append(mirna[0])
+                    if mirna[1]:
+                        finalresult.append(mirna[0][0])
+                    else:
+                        failed_reasons.append(mirna[0])
         except Queue.Empty:
-            time.sleep(5)
+            time.sleep(2)
             continue
 
-    return finalresult
+
+    return finalresult, failed_reasons
+
+
+def convert_failure_reasons_list(list_failure_reasons):
+    out_dict_reasons = {} # key is chromosome
+    for dict_reason in list_failure_reasons:
+        which = '0'
+        peak = ''
+        chrom = ''
+        strand = ''
+        region = ''
+        for key in dict_reason: # key is a tuple: ('Chr1', (21784879, 21785192), '-')
+            if key == 'which':
+                which = dict_reason[key]
+                continue
+            if key == 'peak':
+                peak = dict_reason[key]
+                continue
+            chrom = key[0]
+            if chrom not in out_dict_reasons:
+                out_dict_reasons[chrom] = {'+': {},
+                                           '-': {}}
+            strand = key[2]
+            region = key[1]
+            out_dict_reasons[chrom][strand][key[1]] = dict_reason[key]
+        out_dict_reasons[chrom][strand][region]['which'] = which
+        out_dict_reasons[chrom][strand][region]['peak'] = peak
+    return out_dict_reasons
+
+
+def write_dict_reasons(dict_reasons, fname, faileddumpname, fastaname, combinedsortedbamname, samplenames, outfolder):
+    list_not_pass_expression = []
+    dict_express_info_all = {}
+    outf = open(fname, 'w')
+    for chrom in dict_reasons:  # key is chromosome
+        for strand in dict_reasons[chrom]:
+            for region in dict_reasons[chrom][strand]:
+                outf.write("===========================================================\n")
+                regionkey1 = chrom + ":" + str(region[0]) + "-" + str(region[1])
+                regionkey = regionkey1 + "\t" + strand + "\tpeak-region:" + dict_reasons[chrom][strand][region]['peak'] + "\t" + dict_reasons[chrom][strand][region]['which']
+                outf.write( regionkey +"\n")
+                dict_region = dict_reasons[chrom][strand][region]
+                for key in dict_region:
+                    if isinstance(key, str):
+                        outf.write(key + ":" + dict_region[key] + "\n")
+                for key in dict_region:
+                    if isinstance(key, tuple):
+                        outf.write("MATURE region: {0}-{1}, SS: {2}".format(key[0], key[1], key[3]) + "\n")
+                        for v in dict_region[key]:
+                            if isinstance(dict_region[key][v], str):
+                                outf.write(v + "\t" + dict_region[key][v] + "\n")
+                        if 'expression_info' in dict_region[key]:
+                            dict_info = dict_region[key]['expression_info']
+                            dict_express_info_all[regionkey1] = dict_info
+                            #outf.write("total_depth: {0}, mature_depth: {1}, star_depth:{2}, mature_star_ratio:{3}, ".format(dict_info['total_depth_just_this_strand'], dict_info['total_depth_mature'], dict_info['total_depth_star'], dict_info['mature_star_ratio_total']) + "\n")
+                            for k in dict_info:
+                                if isinstance(dict_info[k], dict):
+                                    continue
+                                outf.write(k + "\t" + str(dict_info[k]) + "\n")
+                        if 'ss_info' in dict_region[key]:
+                            list_not_pass_expression.append(dict_region[key]['ss_info'])
+                outf.write("\n")
+    outdump = open(faileddumpname, 'w')
+    cPickle.dump(dict_express_info_all, outdump)
+    dict_not_mirna_info = gen_mirna_info(list_not_pass_expression, fastaname, combinedsortedbamname, samplenames)
+    gen_map_result(dict_not_mirna_info, outfolder)
 
 
 def get_mature_stemloop_star_seq(seqid, mstart, mend, start, end, sstart, send, fastaname):
@@ -2182,6 +2720,24 @@ def get_mature_stemloop_star_seq(seqid, mstart, mend, start, end, sstart, send, 
     return region1, mature_seq, region2, stemloop_seq, region3, star_seq
 
 
+def get_mature_stemloop_seq(seqid, mstart, mend, start, end, fastaname):
+    region1 = seqid+":"+str(mstart)+"-"+str(mend)
+    region2 = seqid+":"+str(start)+"-"+str(end)
+    mature_command = "samtools faidx " + fastaname + " " +region1
+    stemloop_command = "samtools faidx " + fastaname + " " +region2
+    try:
+        samtools_process = subprocess.Popen(mature_command.split(), stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        outmessage, outerr = samtools_process.communicate()
+        mature_seq = str("".join(outmessage.decode().split("\n")[1:]))
+        samtools_process = subprocess.Popen(stemloop_command.split(), stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        outmessage, outerr = samtools_process.communicate()
+        stemloop_seq = str("".join(outmessage.decode().split("\n")[1:]))
+    except Exception as e:
+        sys.stderr.write("Error occurred when calling samtools in get_mature_stemloop_seq.\n")
+        sys.exit(-1)
+    return region1, mature_seq, region2, stemloop_seq
+
+
 def gen_gff_from_result(resultlist, gffname):
 
     f = open(gffname, 'w')
@@ -2189,9 +2745,20 @@ def gen_gff_from_result(resultlist, gffname):
     for idx, mirna in enumerate(resultlist):
         maturename = "miRNA_"+ str(idx)
         mirname = "miRNA-precursor_"+ str(idx)
-        write_gff_line(mirna[0],mirna[1],mirna[2]-1,mirna[-2],mirname, mirname,
-                       feature="miRNA-precursor",fout=f)
-        write_gff_line(mirna[0],mirna[3],mirna[4]-1,mirna[-2],maturename,
+        has_star_expression = "y"
+        overhangsize = "2:2"
+        if mirna[-1]['total_depth_star'] == 0:
+            has_star_expression = 'n'
+
+        if 'max_imperfect_star' in mirna[-1] and mirna[-1]['max_imperfect_star'] != 0:
+            if mirna[-1]['imperfect_star_which'] == 2:
+                overhangsize = "3:3"
+            else:
+                overhangsize = "2:3"
+        other = 'mature_expressed=y;star_expressed=' + has_star_expression + ";" + "overhangsize=" + overhangsize
+        write_gff_line(mirna[0],mirna[1],mirna[2]-1,mirna[-3],mirname, mirname,
+                       feature="miRNA-precursor",other=other, fout=f)
+        write_gff_line(mirna[0],mirna[3],mirna[4]-1,mirna[-3],maturename,
                        maturename, feature="miRNA",fout=f)
     f.close()
 
@@ -2215,7 +2782,7 @@ def gen_mirna_info(resultlist, fastaname, combinedsortedbamname, samplenames):
         matureseq = seqs[1].upper().replace("T", "U")
         stemloopseq = seqs[3].upper().replace("T", "U")
         starseq = seqs[5].upper().replace("T", "U")
-        structure = mirna[-3]  # structure is already reversed if on minus
+        structure = mirna[-4]  # structure is already reversed if on minus
         strand = mirna[8]
         maturestart_inseq = mirna[3] - mirna[1]
         matureend_inseq = mirna[4] - mirna[1]
@@ -2529,11 +3096,11 @@ def gen_mirna_fasta_ss_from_result(resultlist, maturename, stemloopname,
         maturename = "miRNA_" + str(idx)
         mirname = "miRNA-precursor_" + str(idx)
         seqs = get_mature_stemloop_star_seq(mirna[0],mirna[3], mirna[4]-1, mirna[1], mirna[2]-1, mirna[5], mirna[6]-1, fastaname)
-        matureid = ">" + seqs[0] + " " + mirna[-2]+ " " + mirname
-        stemloopid = ">" + seqs[2] + " " + mirna[-2]+ " " + mirname
+        matureid = ">" + seqs[0] + " " + mirna[-3]+ " " + mirname
+        stemloopid = ">" + seqs[2] + " " + mirna[-3]+ " " + mirname
         matureseq = seqs[1].upper().replace("T", "U")
         stemloopseq = seqs[3].upper().replace("T", "U")
-        structure = mirna[-3]
+        structure = mirna[-4]
         maturestart = mirna[3] - mirna[1]
         matureend = mirna[4] - mirna[1]
         starstart = mirna[5] - mirna[1]
@@ -2745,12 +3312,12 @@ def run_check_fasta_format(dict_option):
             write_formatted_string("!!! " + ret[1], 30, sys.stdout)
         return False
 
-def run_check_gff(dict_option):
+def run_check_gff(gffname):
     write_formatted_string_withtime("Checking the format of the GFF file.", 30, sys.stdout)
-    gffsize = os.path.getsize(dict_option["GFF_FILE"])/1024/1024
+    gffsize = os.path.getsize(gffname)/1024/1024
     if gffsize > 50:
         write_formatted_string_withtime("!!! Warning: large GFF file size: " + str(gffsize) + "MB. Make sure the GFF file only contains regions that need to be excluded from miRNA prediction.", 30, sys.stdout)
-    ret = check_gff(dict_option["GFF_FILE"])
+    ret = check_gff(gffname)
     if ret[0]:
         write_formatted_string("*** GFF file OK.\n", 30, sys.stdout)
         return True
@@ -2804,8 +3371,11 @@ def run_check(dict_option, outtempfolder, recovername):
 
     run_check_fasta_format(dict_option)
 
-    if os.path.exists(dict_option["GFF_FILE"]):
-        run_check_gff(dict_option)
+    if os.path.exists(dict_option["GFF_FILE_EXCLUDE"]):
+        run_check_gff(dict_option["GFF_FILE_EXCLUDE"])
+
+    if os.path.exists(dict_option["GFF_FILE_INCLUDE"]):
+        run_check_gff(dict_option["GFF_FILE_INCLUDE"])
 
     last_stage = detect_stage_last_finished(recovername)
     if last_stage == "fold":
@@ -2861,6 +3431,13 @@ def get_samplename_from_sam(samname):
                 samplename = "_".join(line.split()[0].split("_")[0:-2])
                 return samplename
 
+
+def write_failed_reason(dict_reasons, fname):
+    outf = open(fname, 'w')
+    for key in dict_reasons:
+        outf.write(str(key))
+        outf.write("\n")
+    outf.close()
 
 def run_prepare(dict_option, outtempfolder, recovername):
     logger = None
@@ -2946,6 +3523,7 @@ def run_candidate(dict_option, outtempfolder, recovername):
                                                                               dict_option["FASTA_FILE"],
                                                                               rnalfoldinputprefix,
                                                                               outputdumpprefix,
+                                                                              dict_option['READS_DEPTH_CUTOFF'] * 0.5,
                                                                               logger)
     write_formatted_string_withtime( "All sequences generated.", 30, sys.stdout)
     loci_dump_file = open(loci_dump_name, 'wb')
@@ -3055,10 +3633,37 @@ def run_predict(dict_option, outtempfolder, recovername):
                     str(dict_option["NUM_OF_CORE"]) + " parallel processes.")
     samplenamefilename = dict_recover["finished_stages"]["prepare"]["samplenamefilename"]
     samplenames = cPickle.load(open(samplenamefilename))
+    combinedsortedbamname = os.path.join(outtempfolder,"combined.filtered.sort.bam")
+
+    allow_3nt_overhang = dict_option['ALLOW_3NT_OVERHANG']
+    allow_no_star = dict_option['ALLOW_NO_STAR_EXPRESSION']
+    output_details = dict_option['OUTPUT_DETAILS_FOR_DEBUG']
+    min_mature_len = dict_option['MIN_MATURE_LEN']
+    max_mature_len = dict_option['MAX_MATURE_LEN']
 
     foldnames = dict_recover["finished_stages"]["fold"]["foldnames"]
-    result = gen_miRNA_loci_nopredict(dict_recover["finished_stages"]["candidate"]["infodump"],
-                                      foldnames, 55, logger)
+    result, failed_reasons = gen_miRNA_loci_nopredict(dict_recover["finished_stages"]["candidate"]["infodump"],
+                                                      foldnames, combinedsortedbamname,
+                                                      samplenames,  allow_3nt_overhang,
+                                                      allow_no_star, output_details,
+                                                      min_mature_len,
+                                                      max_mature_len,
+                                                      55,
+                                                      dict_option['READS_DEPTH_CUTOFF'],
+                                                      logger)
+    failedname = os.path.join(dict_option["OUTFOLDER"],dict_option["NAME_PREFIX"]+"_reason_why_not_miRNA.txt")
+    faileddumpname = os.path.join(dict_option["OUTFOLDER"],dict_option["NAME_PREFIX"]+"_failed.dict.dump")
+    if failed_reasons:
+        failedreadmappingfolder = os.path.join(dict_option['OUTFOLDER'],"failed_readmapping")
+        if not os.path.exists(failedreadmappingfolder):
+            os.mkdir(failedreadmappingfolder)
+
+        formatted_fail_reasons = convert_failure_reasons_list(failed_reasons)
+        write_dict_reasons(formatted_fail_reasons, failedname, faileddumpname, dict_option["FASTA_FILE"],
+                           os.path.join(outtempfolder,
+                                        "combined.filtered.sort.bam"),
+                           samplenames, failedreadmappingfolder)
+
     if len(result)==0:
         write_formatted_string_withtime("0 miRNA identified. No result files generated.", 30, sys.stdout)
         if logger:
@@ -3069,6 +3674,7 @@ def run_predict(dict_option, outtempfolder, recovername):
     maturename = os.path.join(dict_option["OUTFOLDER"],dict_option["NAME_PREFIX"]+"_miRNA.mature.fa")
     stemloopname = os.path.join(dict_option["OUTFOLDER"],dict_option["NAME_PREFIX"]+"_miRNA.precursor.fa")
     ssname = os.path.join(dict_option["OUTFOLDER"],dict_option["NAME_PREFIX"]+"_miRNA.precursor.ss")
+
 
     write_formatted_string_withtime("The output files are in " + dict_option["OUTFOLDER"], 30, sys.stdout)
     if logger:
@@ -3110,6 +3716,11 @@ def run_predict(dict_option, outtempfolder, recovername):
     resultlistname = os.path.join(outtempfolder,dict_option["NAME_PREFIX"]+"_miRNA.info.dump")
     resultfile = open(resultlistname,'w')
     cPickle.dump(result,resultfile)
+
+    dict_info_name = os.path.join(outtempfolder,dict_option["NAME_PREFIX"]+"_miRNA.dict.info.dump")
+    resultfile = open(dict_info_name,'w')
+    cPickle.dump(dict_mirna_info,resultfile)
+
 
     gen_mirna_fasta_ss_from_result(result, maturename, stemloopname, dict_option["FASTA_FILE"], ssname)
     if logger:
@@ -3186,8 +3797,12 @@ if __name__ == '__main__':
         exit(-1)
 
     sys.stdout.write("\n")
-    if os.path.exists(dict_option["GFF_FILE"]):
-        gff_good = run_check_gff(dict_option)
+    if os.path.exists(dict_option["GFF_FILE_EXCLUDE"]):
+        gff_good = run_check_gff(dict_option["GFF_FILE_EXCLUDE"])
+        if not gff_good:
+            exit(-1)
+    elif os.path.exists(dict_option["GFF_FILE_INCLUDE"]):
+        gff_good = run_check_gff(dict_option["GFF_FILE_INCLUDE"])
         if not gff_good:
             exit(-1)
     else:

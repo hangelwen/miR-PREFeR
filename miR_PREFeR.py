@@ -2172,7 +2172,7 @@ def check_expression_new(dict_map_info, samplenames, start,
     mature_len = maturepos_genome[1] - maturepos_genome[0]
     star_len = starpos_genome[1] - starpos_genome[0]
     pre_len = end - start
-
+    dict_info['samplenames'] = samplenames
     for sample in samplenames:
         dict_info[sample] = {}
         dict_info[sample]['reads_pre'] = 0  # number of reads mapped to the precursor region (on the same strand as the locus)
@@ -2183,6 +2183,7 @@ def check_expression_new(dict_map_info, samplenames, start,
         dict_info[sample]['reads_mature_isoform'] = 0  # possible isoform
         dict_info[sample]['reads_mature_inside'] = 0
         dict_info[sample]['bases_with_reads_start'] = 0
+        #dict_info[sample]['bases_with_read_coverage'] = [0] * precursor
         # the following entries are for imperfect star sequences. The three
         # values are for star sequence at [star_start, star_end+1],
         # [star_start+1, star_end+1], and [star_start+1, star_end]
@@ -2230,7 +2231,7 @@ def check_expression_new(dict_map_info, samplenames, start,
     total_depth_star = 0
     mature_depth_each_sample = []
     total_depth_imperfect_star = [0, 0, 0]
-    for sample in dict_info:
+    for sample in samplenames:
         total_depth_just_this_strand += dict_info[sample]['reads_pre']
         total_depth_anti += dict_info[sample]['reads_antisense']
         total_depth_mature += dict_info[sample]['reads_mature']
@@ -2282,13 +2283,12 @@ def check_expression_new(dict_map_info, samplenames, start,
             dict_info['imperfect_star_end'] = star_end
             dict_info['max_imperfect_star'] = max_imperfect_star
             dict_info['imperfect_star_which'] = which
-
     mature_star_ratio_tatal =  float(total_depth_mature + max(total_depth_star, max_imperfect_star)) / total_depth_just_this_strand
     dict_info['mature_star_ratio_total'] = mature_star_ratio_tatal
     mature_star_ratio_tatal_both_strand =  float(total_depth_mature + max(total_depth_star, max_imperfect_star)) / (total_depth_just_this_strand + total_depth_anti)
     dict_info['mature_star_ratio_total_both_strand'] = mature_star_ratio_tatal_both_strand
     dict_info['mature_iso_star_ratio_total'] = float(total_depth_isoform + max(total_depth_star, max_imperfect_star)) / total_depth_just_this_strand
-    if max_imperfect_star in dict_info:
+    if 'max_imperfect_star' in dict_info:
         dict_info['total_depth_star'] = max( total_depth_star, max_imperfect_star)
     return dict_info
 
@@ -2406,7 +2406,7 @@ def check_loci(structures, matures, region, dict_mapinfo_region, which,
                                                     strand,
                                                     allow_3nt_overhang
                                                  )
-                    if exprinfo['mature_star_distance'] <= 3:
+                    if exprinfo['mature_star_distance'] <= 4:
                            dict_why_not_miRNA_reasons[key][key1]["FAIL_EXPRESS_PATTERN_MATURE_STAR_TOO_CLOSE"] = "FAILED"
                            dict_why_not_miRNA_reasons[key][key1]['ss_info'] = [region[0], structinfo[2],
                                                                                structinfo[3], m0, m1, structinfo[0],
@@ -2426,26 +2426,45 @@ def check_loci(structures, matures, region, dict_mapinfo_region, which,
                             outputinfo = [region[0], structinfo[2],
                                           structinfo[3], m0, m1, structinfo[0],
                                           structinfo[1], ss, strand, True, exprinfo]
+                            if 'max_imperfect_star' in exprinfo:
+                                outputinfo[5] = exprinfo['imperfect_star_start']
+                                outputinfo[6] = exprinfo['imperfect_star_end']
                             lowest_energy = energy
                     else:  #  no star expression
                         if not allow_no_star:
-                            dict_why_not_miRNA_reasons[key][key1]['FAIL_EXPRESS_PATTERN_NO_STAR_EXPRESSION_AND_DISALLOW_NO_STAR'] = "FAILED"
+                            dict_why_not_miRNA_reasons[key][key1]['FAIL_EXPRESS_PATTERN_NO_STAR_EXPRESSION_DISALLOW_NO_STAR'] = "FAILED"
                             dict_why_not_miRNA_reasons[key][key1]['ss_info'] = [region[0], structinfo[2],
                                                                                 structinfo[3], m0, m1, structinfo[0],
                                                                                 structinfo[1], ss, strand, False, exprinfo]
                             dict_why_not_miRNA_reasons[key][key1]['expression_info'] = exprinfo
                             continue
-                        if exprinfo['mature_iso_star_ratio_total'] >= 0.8 and exprinfo['total_depth_isoform'] > peak_depth:  # but very high expression
-                            #if min(exprinfo[4]) < 100:
-                            #    dict_why_not_miRNA_reasons[key][key1]["FAIL_EXPRESS_PATTERN_NO_STAR_EXPRESSION_LOW_MATURE_EXPRESSION_IN_SOME_SAMPLE"] = "FAILED"
-                            #    continue
-                            #  The last 'False' means this is not an confident miRNA
+                        too_many_start = False
+                        for sample in samplenames:
+                            if exprinfo[sample]['ratio_bases_with_reads_start'] > 0.5:
+                                too_many_start = True
+                        if too_many_start:
+                            dict_why_not_miRNA_reasons[key][key1]['FAIL_EXPRESS_PATTERN_NO_STAR_EXPRESSION_TOO_MANY_START'] = "FAILED"
+                            dict_why_not_miRNA_reasons[key][key1]['ss_info'] = [region[0], structinfo[2],
+                                                                                structinfo[3], m0, m1, structinfo[0],
+                                                                                structinfo[1], ss, strand, False, exprinfo]
+                            dict_why_not_miRNA_reasons[key][key1]['expression_info'] = exprinfo
+                            continue
+                        expressed_sample = len([x for x in exprinfo['mature_depth_each_sample'] if x > 0])
+                        expressed_all = False
+                        if expressed_sample == len(exprinfo['mature_depth_each_sample']):
+                            expressed_all = True
+                        if exprinfo['mature_iso_star_ratio_total'] >= 0.8 and (expressed_all or exprinfo['total_depth_mature'] >= 1000):
                             outputinfo = [region[0], structinfo[2],
                                           structinfo[3], m0, m1, structinfo[0],
                                           structinfo[1], ss, strand, False, exprinfo]
                             lowest_energy = energy
                         else:
-                            dict_why_not_miRNA_reasons[key][key1]['FAIL_EXPRESS_PATTERN_NO_STAR_EXPRESSION_NOT_GOOD_PATTERN'] = "FAILED"
+                            if exprinfo['mature_iso_star_ratio_total'] < 0.8:
+                                dict_why_not_miRNA_reasons[key][key1]['FAIL_EXPRESS_PATTERN_NO_STAR_MATURE_STAR_RATIO_TOO_SMALL'] = "FAILED"
+                            if exprinfo['total_depth_mature'] <= 100:
+                                dict_why_not_miRNA_reasons[key][key1]['FAIL_EXPRESS_PATTERN_NO_STAR_MATURE_DEPTH_TOO_SMALL'] = "FAILED"
+                            if not expressed_all:
+                                dict_why_not_miRNA_reasons[key][key1]['FAIL_EXPRESS_PATTERN_NO_STAR_MATURE_NOT_IN_ALL_SAMPLE'] = "FAILED"
                             dict_why_not_miRNA_reasons[key][key1]['ss_info'] = [region[0], structinfo[2],
                                                                                 structinfo[3], m0, m1, structinfo[0],
                                                                                 structinfo[1], ss, strand, True, exprinfo]
@@ -2664,7 +2683,11 @@ def write_dict_reasons(dict_reasons, fname, faileddumpname, fastaname, combineds
                         if 'expression_info' in dict_region[key]:
                             dict_info = dict_region[key]['expression_info']
                             dict_express_info_all[regionkey1] = dict_info
-                            outf.write("total_depth: {0}, mature_depth: {1}, star_depth:{2}, mature_star_ratio:{3}, ".format(dict_info['total_depth_just_this_strand'], dict_info['total_depth_mature'], dict_info['total_depth_star'], dict_info['mature_star_ratio_total']) + "\n")
+                            #outf.write("total_depth: {0}, mature_depth: {1}, star_depth:{2}, mature_star_ratio:{3}, ".format(dict_info['total_depth_just_this_strand'], dict_info['total_depth_mature'], dict_info['total_depth_star'], dict_info['mature_star_ratio_total']) + "\n")
+                            for k in dict_info:
+                                if isinstance(dict_info[k], dict):
+                                    continue
+                                outf.write(k + "\t" + str(dict_info[k]) + "\n")
                         if 'ss_info' in dict_region[key]:
                             list_not_pass_expression.append(dict_region[key]['ss_info'])
                 outf.write("\n")

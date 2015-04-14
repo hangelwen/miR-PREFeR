@@ -2,7 +2,7 @@
 
 **Plant microRNA prediction tools that utilize small RNA sequencing data are emerging quickly. These existing tools have at least one of the following problems: 1. high false positive rate; 2. long running time; 3. work only for genomes in their databases; 4. hard to install or use. We develop miR-PREFeR, which uses expression patterns of miRNA and follows the criteria for plant microRNA annotation to accurately predict plant miRNAs from one or more small RNA-Seq data samples of the same species. We tested miR-PREFeR on several plant species. The results show that miR-PREFeR is sensitive, accurate, fast, and has low memory footprint.**
 
-**The miR-PREFeR paper has been accepted by Bioinformatics. <http://bioinformatics.oxfordjournals.org/content/early/2014/06/14/bioinformatics.btu380.abstract>**
+**The miR-PREFeR paper is published on Bioinformatics. <http://bioinformatics.oxfordjournals.org/content/30/19/2837.abstract>. Please cite the paper if you use the tool in your work.**
 
 **The miR-PREFeR pipeline is still under active development. To use the newest features from the pipeline, check the  <https://github.com/hangelwen/miR-PREFeR> page and obtain the newest version. The current version is only tested under Python 2.6.7, Python 2.7.2 and Python 2.7.3 and should work under Python 2.6.* and Python 2.7.\* (Tested platforms: Linux, Mac OS). It does NOT work under Python 3.0 currently. If you find any problem, please contact the author at hangelwen@gmail.com.**
 
@@ -41,18 +41,9 @@ Samtools can be downloaded from <http://samtools.sourceforge.net/>. Please follo
 
 If successful, you should see an executable program named "samtools" in the same folder. You need to add the samtools executable to the PATH environment variable.
 
+
 ### For Mac OS users ###
 
-#### a. Homebrew users ####
-Homebrew  <https://github.com/Homebrew/homebrew> is a fantastic package manager for MacOS. If you use Homebrew to manage your package on your Mac, mir-prefer and all it's dependencies can be installed simply by the following command
-
-    brew tap homebrew/science
-    brew update
-    brew install --HEAD mir-prefer
-
-Instructions on how to install and use homebrew can be found at <http://coolestguidesontheplanet.com/setting-up-os-x-mavericks-and-homebrew/>.
-
-#### b. Other Mac  users ####
 Since it maybe difficult for some Mac OS users to successfully compile C/C++ programs, we provide several pre-compiled versions of samtools and RNALfold, which are put in the dependency/Mac/ folder. Mac OS users can first try to use the pre-compiled programs. If they do not work (This is possible), then try to compile from the source code by following the instructions in this section. To test whether a pre-compiled program works on your machine, change directory to the folder that contains the program, and then:
 
     chmod +x RNALfold
@@ -185,13 +176,14 @@ The miR\_PREFeR.py script takes a configuration file as input. The configuration
 5. PRECURSOR_LEN: The max length of a miRNA precursor. The default is 300
 6. READS_DEPTH\_CUTOFF: The first step of the pipeline is to identify candidate regions of the miRNA loci. If READS\_DEPTH\_CUTOFF = N, then genomic position that the mapped depth is smaller than N is not considered. Default value is 10.
 7. NUM\_OF\_CORE: Number of CPUS/Cores avalible for this computation. If commented out or leave blank, 1 is used.
-8. OUTFOLDER: Outputfolder. If not specified, use the current working directory.
-9. NAME\_PREFIX: Prefix for naming the output files. For portability, please DO NOT contain any spaces and special characters. The prefered includes 'A-Z', 'a-z', '0-9', and underscore '_'.
-10. MAX_GAP: Maximum gap length between two contigs to form a candidate region. Default value is 100.
-11. MIN_MATURE\_LEN and MAX\_MATURE_LEN: the range of the mature length. The default values are 18 and 24, respectively.
-12. ALLOW_NO\_STAR\_EXPRESSION: If this is 'Y', then the criteria that requries the star sequence must be expressed (that is, there should be at least one read mapped to the star position.) is loosed if the expression pattern is good enough (.e.g. the majority of the reads mapped to the region are mapped to the mature position, and the expression patterns are consistent across different samples). The default value is Y.
-13. ALLOW\_3NT\_OVERHANG: In most cases, the mature star duplex has 2nt 3' overhangs. If this is set to 'Y', then 3nt overhangs are allowed. The default value is 'N'.
-14. CHECKPOINT_SIZE: The pipeline makes a checkpoint after each major step. In addition, because the folding stage is the most time consuming stage, it makes a checkpiont for each folding process after folding every CHECKPOINT\_SIZE sequences. If the pipeline is killed for some reason in the middle of folding, it can be restarted using `recover` command from where it was stopped. The default value is 3000.
+8. OUTFOLDER: Outputfolder. If not specified, use the current working directory. Please make sure that you have enough disk space for the folder, otherwise the pipeline may fail.
+9. TMPFOLDER: Absolute path of the folder that contains intermidate/temperary files during the run of the pipeline. If not specified, miR-PREFeR uses a folder with suffix "\_tmp" under OUTFOLDER by default. Please make sure that you have enough disk space for the folder, otherwise the pipeline may fail.
+10. NAME\_PREFIX: Prefix for naming the output files. For portability, please DO NOT contain any spaces and special characters. The prefered includes 'A-Z', 'a-z', '0-9', and underscore '_'.
+11. MAX_GAP: Maximum gap length between two contigs to form a candidate region. Default value is 100.
+12. MIN_MATURE\_LEN and MAX\_MATURE_LEN: the range of the mature length. The default values are 18 and 24, respectively.
+13. ALLOW_NO\_STAR\_EXPRESSION: If this is 'Y', then the criteria that requries the star sequence must be expressed (that is, there should be at least one read mapped to the star position.) is loosed if the expression pattern is good enough (.e.g. the majority of the reads mapped to the region are mapped to the mature position, and the expression patterns are consistent across different samples). The default value is Y.
+14. ALLOW\_3NT\_OVERHANG: In most cases, the mature star duplex has 2nt 3' overhangs. If this is set to 'Y', then 3nt overhangs are allowed. The default value is 'N'.
+15. CHECKPOINT_SIZE: The pipeline makes a checkpoint after each major step. In addition, because the folding stage is the most time consuming stage, it makes a checkpiont for each folding process after folding every CHECKPOINT\_SIZE sequences. If the pipeline is killed for some reason in the middle of folding, it can be restarted using `recover` command from where it was stopped. The default value is 3000.
 
 ### c. Run the pipeline. ###
 
@@ -255,7 +247,8 @@ An example output folder that contains all the files can be found at
 <http://goo.gl/f4Jb2p>
 
 During the running of the pipeline, there is a folder named NAME\_PREFIX +
-"_tmp" in the output folder. The folder contains intermediate files generated by
+"_tmp" in the output folder (The temporary folder could be at another place if you specified
+the TMPFOLDER option in the config file). The folder contains intermediate files generated by
 the pipeline. If the job is finished without interruption, the folder is deleted
 by default (Specify the `-k` option can keep the folder, but this is usually not
 needed.).  **If the job is interrupted half way, then the folder is not removed

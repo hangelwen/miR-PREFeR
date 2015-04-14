@@ -92,6 +92,7 @@ def parse_configfile(configfile):
         "MAX_GAP":100,
         "NUM_OF_CORE":1,
         "OUTFOLDER":"./",
+        "TMPFOLDER": "",
         "NAME_PREFIX":"",
         "PIPELINE_PATH":"",
         "DELETE_IF_SUCCESS":"Y",
@@ -143,7 +144,7 @@ def parse_configfile(configfile):
                 if key == "READS_DEPTH_CUTOFF" or key == 'MAX_GAP' or key == 'CHECKPOINT_SIZE':
                     dict_option[key] = int(sp[1].strip())
                     continue
-                if key =="OUTFOLDER" or key == "NAME_PREFIX" or key == "DELETE_IF_SUCCESS":
+                if key =="OUTFOLDER" or key== "TMPFOLDER" or key == "NAME_PREFIX" or key == "DELETE_IF_SUCCESS":
                     dict_option[key] = sp[1].strip()
                     continue
                 if key == 'ALLOW_NO_STAR_EXPRESSION' or key == 'ALLOW_3NT_OVERHANG':
@@ -712,8 +713,10 @@ def sort_index_bam(bamfile, outbamprefix):
     return outbamprefix+".sort.bam"
 
 
-def expand_bamfile(bamfile, maxdepth, outputbamfile, outputsamfile):
-    tempsamfile = tempfile.NamedTemporaryFile(mode='w',prefix = str(os.getpid())+"tempsam", suffix=".sam", delete=False)
+def expand_bamfile(bamfile, maxdepth, outputbamfile, outputsamfile, tmpdir):
+    #tempsamfile = tempfile.NamedTemporaryFile(mode='w',prefix = str(os.getpid())+"tempsam", suffix=".sam", delete=False)
+    tempsamname = os.path.join(tmpdir, str(os.getpid())+".tempsam.sam")
+    tempsamfile = open(tempsamname, 'w')
     command = "samtools view -h -o " + tempsamfile.name + " " + bamfile
     try:
         subprocess.check_call(command.split())
@@ -861,7 +864,7 @@ def prepare_data(dict_option, outtempfolder, logger):
     expandedbam_minus = os.path.join(outtempfolder, "expanded.minus.bam")
     if logger:
         logger.info("Generating expanded BAM and SAM files")
-    expand_bamfile(combinedbamname, dict_option["READS_DEPTH_CUTOFF"], expandedbamname, expandedsamname)
+    expand_bamfile(combinedbamname, dict_option["READS_DEPTH_CUTOFF"], expandedbamname, expandedsamname, outtempfolder)
     if logger:
         logger.info("Generating "+expandedbam_plus)
     filter_bam_by_flag(expandedbamname, 16, expandedbam_plus, keep=False)
@@ -872,7 +875,7 @@ def prepare_data(dict_option, outtempfolder, logger):
 
 
 def gen_contig_typeA(expandedbam_plus, expandedbam_minus, dict_option,
-                     contig_minlen, logger):
+                     contig_minlen, logger, tmpdir):
     def get_next_non_zero_region(name):
         with open(name) as f:
             region = []
@@ -940,7 +943,7 @@ def gen_contig_typeA(expandedbam_plus, expandedbam_minus, dict_option,
             sys.stderr.write("Error occurred when generating contigs(typeA).\n")
             sys.exit(-1)
 
-    depthfilename = os.path.join(dict_option["OUTFOLDER"],dict_option["NAME_PREFIX"]+"_tmp", "bam.depth.cut"+str(dict_option["READS_DEPTH_CUTOFF"]))
+    depthfilename = os.path.join(tmpdir, "bam.depth.cut"+str(dict_option["READS_DEPTH_CUTOFF"]))
     f=open(depthfilename,'w')
     f.write(output.decode())
     f.close()
@@ -3510,7 +3513,7 @@ def run_candidate(dict_option, outtempfolder, recovername):
     #if the length of a contig is smaller than min_contig_len, then ignore it
     min_contig_len = 19
     write_formatted_string_withtime("Generating peaks.", 30, sys.stdout)
-    depthfilename, dict_contigs = gen_contig_typeA(expandedbam_plus,expandedbam_minus, dict_option, min_contig_len, logger)
+    depthfilename, dict_contigs = gen_contig_typeA(expandedbam_plus,expandedbam_minus, dict_option, min_contig_len, logger, outtempfolder)
     write_formatted_string_withtime( "All peaks generated.", 30, sys.stdout)
     write_formatted_string_withtime( "Combining peaks to form candidate regions.", 30, sys.stdout)
     dict_loci, piece_info = gen_candidate_region_typeA(dict_contigs,dict_len,dict_option,outtempfolder, logger)
@@ -3775,6 +3778,8 @@ if __name__ == '__main__':
     #make temp dir to store temporary files
     outfolder = dict_option["OUTFOLDER"]
     outtempfolder = os.path.join(outfolder, dict_option["NAME_PREFIX"]+"_tmp")
+    if dict_option['TMPFOLDER']:  # user specified a tmp folder
+        outtempfolder = dict_option['TMPFOLDER']
     recovername = os.path.join(outtempfolder, dict_option["NAME_PREFIX"]+"_recover")
 
 

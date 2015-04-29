@@ -3090,7 +3090,7 @@ def gen_mirna_fasta_ss_from_result(resultlist, maturename, stemloopname,
     '''
     Each result:
     Seqid, locus_start, locus_end, mature_start, mature_end, star_start
-    star_end, structure, strand, star_present
+    star_end, structure, strand, star_present, mapinfo
     '''
     f1 = open(maturename, 'w')
     f2 = open(stemloopname, 'w')
@@ -3123,7 +3123,7 @@ def gen_mirna_fasta_ss_from_result(resultlist, maturename, stemloopname,
             seq_dot = seq_dot + "." * (maturestart-starend)
             seq_dot = seq_dot + mature_M
             seq_dot = seq_dot + "." * (len(stemloopseq)-matureend)
-        if mirna[-2] == "-":
+        if mirna[-3] == "-":
             matureseq = get_reverse_complement(matureseq)
             stemloopseq = get_reverse_complement(stemloopseq)
             #structure = structure[::-1]

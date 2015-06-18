@@ -1061,141 +1061,6 @@ def dump_loci_seqs_samtool(dict_loci, fastaname, outputprefix, num_of_proc):
     fout.close()
     return ret_list
 
-def dump_loci_seqs_and_alignment(dict_loci, sortedbamname, fastaname, outputseqprefix, outputalnprefix, num_of_proc):
-    '''
-    Generate num_of_proc fasta files that contains all the loci/extended region sequence.
-    Generate num_of_proc dump files that contains all the loci/extended region alignment infomation.
-
-    The entries in the dump file are the same order as in the output fasta files.
-    '''
-
-    seqids = sorted(dict_loci.keys())
-    num_loci = 0
-    num_seq = 0
-    total_loci = 0
-    for seqid in seqids:
-        total_loci += len(dict_loci[seqid])
-    # How many loci in one file?
-    num_in_one_file = int(total_loci/num_of_proc) + 1
-    cur_loci = 0
-    cur_fout = 0
-    fname = outputseqprefix+"_0.fa"
-    fout  = open(fname, 'w')
-    fnamedump = outputalnprefix+"_0.dump"
-    foutdump  = open(fnamedump, 'wb')
-    ret_list = []  # a list of (name, num_of_seq) tuples
-
-    dump_key = None
-    dump_value = []
-    for seqid in seqids:
-        for loci in dict_loci[seqid]:
-            num_loci += 1
-            if cur_loci < num_in_one_file * (cur_fout+1):
-                pass
-            else:
-                cur_fout += 1
-                fout.close()
-                #ret_list.append((fname, num_seq))
-                ret_list.append((fname, fnamedump))
-                fname = outputseqprefix+"_"+str(cur_fout)+".fa"
-                fout = open(fname, 'w')
-                fnamedump = outputalnprefix+"_"+str(cur_fout)+".dump"
-                foutdump  = open(fnamedump, 'wb')
-            cur_loci += 1
-            plus_seq = []
-            minus_seq = []
-            plus_tag = []
-            minus_tag = []
-
-            plus_dumpinfo = []
-            minus_dumpinfo = []
-            loci_pos = str(loci[0][0]) + "-" + str(loci[0][1])
-            for idx, extendregion in enumerate(loci[1:]):
-                #extendregion is [), but faidx is []
-                region = seqid+":"+str(extendregion[0][0])+"-"+str(extendregion[0][1]-1)
-                regionpos = seqid+":"+str(extendregion[0][0])+"-"+str(extendregion[0][1])
-                command = "samtools faidx "+fastaname+" "+region
-                seq = ""
-                try:
-                    samtools_process = subprocess.Popen(command.split(),stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-                    outmessage, outerr = samtools_process.communicate()
-                    seq = str("".join(outmessage.decode().split("\n")[1:]))
-                except Exception as e:
-                    sys.stderr.write("Error occurred when cutting loci sequence.\n")
-                    sys.exit(-1)
-                strands = set()
-                otherinfo = ""
-                for peak in extendregion[1]:
-                    strands.add(peak[2])
-                    otherinfo = otherinfo + str(peak[0])+","+str(peak[1])+","+str(peak[2])+";"
-                otherinfo = otherinfo.rstrip(";")
-                seqtag = ""
-                # a tag indicates which extend region this sequence belongs to.
-                # Possible values:
-                # "0": This loci has only one extend region, and 'seq' is the sequence for the region
-                # "L": This loci has two extend regions, and 'seq' is the sequence for the left region
-                # "R": This loci has two extend regions, and 'seq' is the sequence for the right region
-                extendregiontag = " 0 "
-                if len(loci)==3 and idx == 0:  # Left side region
-                    extendregiontag = " L "
-                elif len(loci)==3 and idx == 1:  # Right side region
-                    extendregiontag = " R "
-                if len(strands) == 1:
-                    if "+" in strands:
-                        seqtag = ">"+regionpos+" + "+ loci_pos + extendregiontag + otherinfo+"\n"  # >ExtendRegion strand loci 0/L/R peaks
-                        dump_key = [seqid, (extendregion[0][0],extendregion[0][1]), "+"]
-                    else:
-                        seqtag = ">"+regionpos+" - "+ loci_pos + extendregiontag + otherinfo+"\n"
-                        dump_key = [seqid, (extendregion[0][0],extendregion[0][1]), "-"]
-                        seq = get_reverse_complement(seq)
-                    fout.write(seqtag)
-                    fout.write(seq+"\n")
-                    num_seq += 1
-                    alignments = samtools_view_region(sortedbamname, seqid,
-                                                      extendregion[0][0],
-                                                      extendregion[0][1])
-                    dict_loci_info = gen_loci_alignment_info(alignments, seqid, extendregion)
-                    matures = gen_possible_matures_loci(dict_loci_info, extendregion)
-                    cPickle.dump([dump_key, extendregiontag.strip(), dict_loci_info, matures], foutdump, protocol=2)
-                    continue
-                if len(strands) == 2:
-                    seqtag = ">"+regionpos+" + "+ loci_pos + extendregiontag + otherinfo+"\n"
-                    plus_tag.append(seqtag)
-                    plus_seq.append(seq)
-                    #fout.write(seqtag)
-                    #fout.write(seq+"\n")
-                    num_seq += 1
-                    seq = get_reverse_complement(seq)
-                    seqtag = ">"+regionpos+" - "+ loci_pos + extendregiontag + otherinfo+"\n"
-                    minus_tag.append(seqtag)
-                    minus_seq.append(seq)
-                    num_seq += 1
-
-                    alignments = samtools_view_region(sortedbamname, seqid,
-                                                      extendregion[0][0],
-                                                      extendregion[0][1])
-                    dict_loci_info = gen_loci_alignment_info(alignments, seqid, extendregion)
-                    matures = gen_possible_matures_loci(dict_loci_info, extendregion)
-                    dump_key = [seqid, (extendregion[0][0],extendregion[0][1]), "+"]
-                    plus_dumpinfo.append([dump_key, extendregiontag.strip(), dict_loci_info, matures])
-                    dump_key = [seqid, (extendregion[0][0],extendregion[0][1]), "-"]
-                    minus_dumpinfo.append([dump_key, extendregiontag.strip(), dict_loci_info, matures])
-
-                    #fout.write(seqtag)
-                    #fout.write(seq+"\n")
-
-            if len(plus_tag):
-                for which, tag in enumerate(plus_tag):
-                    fout.write(tag)
-                    fout.write(plus_seq[which]+"\n")
-                    cPickle.dump(plus_dumpinfo[which], foutdump, protocol=2)
-                for which, tag in enumerate(minus_tag):
-                    fout.write(minus_tag[which])
-                    fout.write(minus_seq[which]+"\n")
-                    cPickle.dump(minus_dumpinfo[which], foutdump, protocol=2)
-    ret_list.append((fname, fnamedump))
-    fout.close()
-    return num_loci, num_seq, ret_list
 
 def dump_loci_seqs_and_alignment_multiprocess(dict_loci, piece_info_list,
                                               sortedbamname, fastaname,
@@ -1605,6 +1470,8 @@ def gen_loci_alignment_info(alignments, seqid, loci):
 
 def gen_possible_matures_loci(dict_loci_info, loci, strand, min_mature_depth):
     def gen_matures_one_peak(max_num_mature, min_mature_depth, peak_start, peak_end):
+        peak_start = peak_start - 20  # the most abundant read in the peak could start before the peak
+        peak_end = peak_end
         matures = []
         higest = (0, 0, 0, 0)
         for pos in xrange(peak_start, peak_end):

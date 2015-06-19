@@ -2410,7 +2410,7 @@ def filter_next_loci(alndumpname, rnalfoldoutname, combinedsortedbamname,
                                  peak_depth)
             if isinstance(miRNAsL, dict):
                 if not output_details:
-                    continue
+                    pass
                 miRNAsL['which'] = 'L'
                 miRNAsL['peak'] = peak
             yield miRNAsL
@@ -2607,6 +2607,14 @@ def get_mature_stemloop_seq(seqid, mstart, mend, start, end, fastaname):
         sys.exit(-1)
     return region1, mature_seq, region2, stemloop_seq
 
+
+def adjust_mature_star(resultlist):
+    for idx, mirna in enumerate(resultlist):
+        if mirna[-1]['total_depth_mature'] < mirna[-1]['total_depth_star']:
+            mirna[-1]['total_depth_mature'], mirna[-1]['total_depth_star'] = mirna[-1]['total_depth_star'], mirna[-1]['total_depth_mature']
+            mirna[3], mirna[5] = mirna[5], mirna[3]
+            mirna[4], mirna[6] = mirna[6], mirna[4]
+            mirna[-1]['switch'] = True
 
 def gen_gff_from_result(resultlist, gffname):
 
@@ -3550,6 +3558,7 @@ def run_predict(dict_option, outtempfolder, recovername):
     if logger:
         logger.info("The output files are in " + dict_option["OUTFOLDER"])
         logger.info("Generating a gff file contains all predictions. GFF file name: " + gffname)
+    adjust_mature_star(result)
     gen_gff_from_result(result,gffname)
     if logger:
         logger.info("Generating two fasta files contains predicted mature sequences and precursor sequences. Fasta file names: [mature]: " +

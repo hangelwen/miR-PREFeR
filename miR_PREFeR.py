@@ -690,7 +690,7 @@ def gen_keep_regions_sort_bam(bamfile, bedfile, outbamprefix):
     #TODO samtools view generate reads overlap with the region, not only reads
     #in the region. Should this be a problem here??
     command1 = "samtools view -L " + bedfile + " -F 4 -b -o " + outbamprefix+".bam" + " " +bamfile
-    command2 = "samtools sort "+ outbamprefix+".bam -o " + outbamprefix + ".sort"
+    command2 = "samtools sort "+ outbamprefix+".bam -o " + outbamprefix + ".sort.bam"
     command3 = "samtools index " + outbamprefix+".sort.bam"
     try:
         subprocess.check_call(command1.split())
